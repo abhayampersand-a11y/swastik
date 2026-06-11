@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useCachedApi } from "@/lib/redux/hooks"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -25,18 +25,8 @@ const alertConfig = {
 }
 
 export function DashboardAlerts() {
-  const [alerts, setAlerts] = useState<Alert[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch("/api/dashboard/alerts")
-      .then((r) => r.json())
-      .then((d) => {
-        setAlerts(d.alerts ?? [])
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
+  const { data, loading } = useCachedApi<{ alerts: Alert[] }>("/api/dashboard/alerts")
+  const alerts = data?.alerts ?? []
 
   return (
     <Card>

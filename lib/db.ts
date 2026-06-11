@@ -1,4 +1,4 @@
-import { Pool } from "pg"
+import { Pool, PoolClient } from "pg"
 
 const globalForPg = globalThis as unknown as { pool: Pool }
 
@@ -9,7 +9,7 @@ export const pool =
     ssl: { rejectUnauthorized: false },
     max: 10,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000,
   })
 
 if (process.env.NODE_ENV !== "production") globalForPg.pool = pool
@@ -33,4 +33,21 @@ export async function queryOne<T = Record<string, unknown>>(
 ): Promise<T | null> {
   const rows = await query<T>(text, params)
   return rows[0] ?? null
+}
+
+export async function withTransaction<T>(
+  fn: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await pool.connect()
+  try {
+    await client.query("BEGIN")
+    const result = await fn(client)
+    await client.query("COMMIT")
+    return result
+  } catch (e) {
+    await client.query("ROLLBACK")
+    throw e
+  } finally {
+    client.release()
+  }
 }

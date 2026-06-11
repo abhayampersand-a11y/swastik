@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from "recharts"
 import { BarChart3Icon, DownloadIcon } from "lucide-react"
 
@@ -101,8 +101,14 @@ export default function ReportsPage() {
                       <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                       <Tooltip formatter={(value: unknown) => fmt(Number(value))} />
                       <Legend />
-                      <Bar dataKey="revenue" name="Revenue" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                      <ReferenceLine y={0} stroke="#9ca3af" />
+                      <Bar dataKey="revenue" name="Revenue" fill="#16a34a" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="profit" name="Profit" radius={[4, 4, 0, 0]}>
+                        {financialData.map((d, i) => (
+                          <Cell key={i} fill={d.profit >= 0 ? "#15803d" : "#b91c1c"} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>

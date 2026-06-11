@@ -12,6 +12,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlusIcon, SearchIcon, EditIcon, Trash2Icon, PackageIcon, AlertTriangleIcon } from "lucide-react"
 import { InventoryDialog } from "@/components/inventory-dialog"
+import { ConfirmDialog } from "@/components/ui/modal"
 
 interface InventoryItem {
   id: number
@@ -35,6 +36,7 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("all")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<InventoryItem | null>(null)
+  const [deleting, setDeleting] = useState<InventoryItem | null>(null)
 
   const fetchInventory = useCallback(async () => {
     setLoading(true)
@@ -50,9 +52,10 @@ export default function InventoryPage() {
 
   useEffect(() => { fetchInventory() }, [fetchInventory])
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Delete this item?")) return
-    await fetch(`/api/inventory/${id}`, { method: "DELETE" })
+  const handleDelete = async () => {
+    if (!deleting) return
+    await fetch(`/api/inventory/${deleting.id}`, { method: "DELETE" })
+    setDeleting(null)
     fetchInventory()
   }
 
@@ -169,7 +172,7 @@ export default function InventoryPage() {
                           variant="ghost"
                           size="icon"
                           className="text-destructive"
-                          onClick={() => handleDelete(item.id)}
+                          onClick={() => setDeleting(item)}
                         >
                           <Trash2Icon className="size-4" />
                         </Button>
@@ -212,6 +215,16 @@ export default function InventoryPage() {
         categories={categories}
         item={editing}
         onSaved={fetchInventory}
+      />
+
+      <ConfirmDialog
+        open={!!deleting}
+        title="Delete inventory item?"
+        description={deleting ? `"${deleting.name}" will be permanently removed from inventory.` : ""}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+        onCancel={() => setDeleting(null)}
       />
     </MainLayout>
   )

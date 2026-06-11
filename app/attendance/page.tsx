@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { MainLayout } from "@/components/main-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +10,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { ClipboardListIcon, SaveIcon } from "lucide-react"
+import { NoticeDialog } from "@/components/ui/modal"
+import { useCachedApi } from "@/lib/redux/hooks"
 
 interface Laborer { id: number; name: string }
 interface AttendanceRecord {
@@ -29,14 +31,12 @@ export default function AttendancePage() {
   const [month, setMonth] = useState(String(now.getMonth() + 1))
   const [year, setYear] = useState(String(now.getFullYear()))
   const [selectedDate, setSelectedDate] = useState(now.toISOString().split("T")[0])
-  const [laborers, setLaborers] = useState<Laborer[]>([])
+  const { data: laborersData } = useCachedApi<{ laborers: Laborer[] }>("/api/laborers")
+  const laborers = useMemo(() => laborersData?.laborers ?? [], [laborersData])
   const [attendance, setAttendance] = useState<Record<number, AttendanceRecord>>({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    fetch("/api/laborers").then((r) => r.json()).then((d) => setLaborers(d.laborers ?? []))
-  }, [])
+  const [savedNotice, setSavedNotice] = useState(false)
 
   useEffect(() => {
     if (!selectedDate) return
@@ -75,7 +75,7 @@ export default function AttendancePage() {
       body: JSON.stringify({ records }),
     })
     setSaving(false)
-    alert("Attendance saved!")
+    setSavedNotice(true)
   }
 
   const statusColor: Record<string, string> = {
@@ -169,6 +169,14 @@ export default function AttendancePage() {
           </CardContent>
         </Card>
       </div>
+
+      <NoticeDialog
+        open={savedNotice}
+        title="Attendance saved!"
+        description={`Attendance for ${new Date(selectedDate).toLocaleDateString("en-IN")} has been recorded.`}
+        variant="success"
+        onClose={() => setSavedNotice(false)}
+      />
     </MainLayout>
   )
 }

@@ -31,7 +31,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
        salary_type=$5, basic_salary=$6, overtime_rate=$7, notes=$8,
        is_active=$9, updated_at=NOW()
        WHERE id=$10 RETURNING *`,
-      [name, mobile, address, joining_date, salary_type, basic_salary, overtime_rate, notes, is_active, id]
+      [name, mobile, address, joining_date || null, salary_type,
+       Number(basic_salary) || 0, Number(overtime_rate) || 0, notes, is_active ?? true, id]
     )
     return NextResponse.json({ laborer })
   } catch (e) {

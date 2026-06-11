@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
+import { useCachedApi } from "@/lib/redux/hooks"
 import {
   Card,
   CardAction,
@@ -41,6 +41,7 @@ function StatCard({
   value,
   sub,
   icon: Icon,
+  iconColor = "text-muted-foreground bg-muted",
   trend,
   trendLabel,
   loading,
@@ -49,6 +50,7 @@ function StatCard({
   value: string
   sub: string
   icon: React.ElementType
+  iconColor?: string
   trend?: "up" | "down" | "neutral"
   trendLabel?: string
   loading?: boolean
@@ -56,8 +58,10 @@ function StatCard({
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardDescription className="flex items-center gap-1.5">
-          <Icon className="size-3.5 text-muted-foreground" />
+        <CardDescription className="flex items-center gap-2">
+          <span className={`flex size-6 items-center justify-center rounded-md ${iconColor}`}>
+            <Icon className="size-3.5" />
+          </span>
           {title}
         </CardDescription>
         <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
@@ -84,18 +88,7 @@ function StatCard({
 }
 
 export function SectionCards() {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch("/api/dashboard/stats")
-      .then((r) => r.json())
-      .then((d) => {
-        setStats(d)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
+  const { data: stats, loading } = useCachedApi<DashboardStats>("/api/dashboard/stats")
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", {
@@ -111,6 +104,7 @@ export function SectionCards() {
         value={loading ? "…" : String(stats?.total_bookings ?? 0)}
         sub="All time bookings"
         icon={CalendarCheckIcon}
+        iconColor="text-amber-700 bg-amber-100 dark:text-amber-400 dark:bg-amber-950"
         loading={loading}
       />
       <StatCard
@@ -118,6 +112,7 @@ export function SectionCards() {
         value={loading ? "…" : String(stats?.upcoming_events ?? 0)}
         sub="Events in next 30 days"
         icon={CalendarCheckIcon}
+        iconColor="text-blue-700 bg-blue-100 dark:text-blue-400 dark:bg-blue-950"
         trend="neutral"
         trendLabel="Upcoming"
         loading={loading}
@@ -127,6 +122,7 @@ export function SectionCards() {
         value={loading ? "…" : String(stats?.active_events ?? 0)}
         sub="Currently running"
         icon={ActivityIcon}
+        iconColor="text-green-700 bg-green-100 dark:text-green-400 dark:bg-green-950"
         loading={loading}
       />
       <StatCard
@@ -134,6 +130,7 @@ export function SectionCards() {
         value={loading ? "…" : String(stats?.total_customers ?? 0)}
         sub="Registered customers"
         icon={UsersIcon}
+        iconColor="text-violet-700 bg-violet-100 dark:text-violet-400 dark:bg-violet-950"
         loading={loading}
       />
       <StatCard
@@ -141,6 +138,7 @@ export function SectionCards() {
         value={loading ? "…" : String(stats?.available_inventory_items ?? 0)}
         sub="Items with stock > 0"
         icon={BoxesIcon}
+        iconColor="text-teal-700 bg-teal-100 dark:text-teal-400 dark:bg-teal-950"
         loading={loading}
       />
       <StatCard
@@ -148,6 +146,7 @@ export function SectionCards() {
         value={loading ? "…" : String(stats?.pending_payments ?? 0)}
         sub="Customers with balance due"
         icon={CreditCardIcon}
+        iconColor="text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-950"
         trend="down"
         trendLabel="Action needed"
         loading={loading}
@@ -157,6 +156,7 @@ export function SectionCards() {
         value={loading ? "…" : fmt(stats?.monthly_revenue ?? 0)}
         sub={`Revenue this month`}
         icon={BanknoteIcon}
+        iconColor="text-emerald-700 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950"
         trend="up"
         trendLabel="This month"
         loading={loading}
@@ -166,6 +166,7 @@ export function SectionCards() {
         value={loading ? "…" : fmt(stats?.monthly_expenses ?? 0)}
         sub="Expenses this month"
         icon={TrendingDownIcon}
+        iconColor="text-rose-700 bg-rose-100 dark:text-rose-400 dark:bg-rose-950"
         loading={loading}
       />
       <StatCard
@@ -173,6 +174,11 @@ export function SectionCards() {
         value={loading ? "…" : fmt(stats?.net_profit ?? 0)}
         sub="Revenue − Expenses"
         icon={ReceiptIcon}
+        iconColor={
+          (stats?.net_profit ?? 0) >= 0
+            ? "text-emerald-700 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950"
+            : "text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-950"
+        }
         trend={(stats?.net_profit ?? 0) >= 0 ? "up" : "down"}
         trendLabel={(stats?.net_profit ?? 0) >= 0 ? "Profit" : "Loss"}
         loading={loading}

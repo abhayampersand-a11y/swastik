@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { BellIcon } from "lucide-react"
 import Link from "next/link"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -38,6 +39,7 @@ export function SiteHeader() {
         />
         <h1 className="text-base font-medium">{title}</h1>
         <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           <Button variant="ghost" size="icon" asChild>
             <Link href="/notifications">
               <BellIcon className="size-4" />

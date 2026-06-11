@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { MainLayout } from "@/components/main-layout"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,9 @@ import {
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PlusIcon, Trash2Icon, AlertCircleIcon, CheckCircleIcon } from "lucide-react"
+import { NoticeDialog } from "@/components/ui/modal"
+import { FieldError } from "@/components/ui/field-error"
+import { useCachedApi, useInvalidate } from "@/lib/redux/hooks"
 
 interface InventoryItem {
   id: number
@@ -29,6 +32,7 @@ interface BookingItem {
   item_name: string
   unit_type: string
   quantity: number
+  days: number
   rental_rate: number
   discount: number
   amount: number
@@ -39,8 +43,11 @@ const EVENT_TYPES = ["Wedding", "Engagement", "Reception", "Birthday", "Corporat
 
 export default function NewBookingPage() {
   const router = useRouter()
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
+  const invalidateCache = useInvalidate()
+  const { data: customersData } = useCachedApi<{ customers: Customer[] }>("/api/customers")
+  const { data: inventoryData } = useCachedApi<{ items: InventoryItem[] }>("/api/inventory")
+  const customers = customersData?.customers ?? []
+  const inventoryItems = inventoryData?.items ?? []
   const [saving, setSaving] = useState(false)
 
   const [form, setForm] = useState({
@@ -57,14 +64,22 @@ export default function NewBookingPage() {
   })
 
   const [items, setItems] = useState<BookingItem[]>([])
+  const [warning, setWarning] = useState<string | null>(null)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  useEffect(() => {
-    fetch("/api/customers").then((r) => r.json()).then((d) => setCustomers(d.customers ?? []))
-    fetch("/api/inventory").then((r) => r.json()).then((d) => setInventoryItems(d.items ?? []))
-  }, [])
+  // Default rental days from setup → return dates, else 1
+  const defaultDays = () => {
+    if (form.setup_date && form.return_date) {
+      const diff = Math.round(
+        (new Date(form.return_date).getTime() - new Date(form.setup_date).getTime()) / 86400_000
+      )
+      if (diff > 0) return diff
+    }
+    return 1
+  }
 
   const addItem = () => {
-    setItems([...items, { item_id: 0, item_name: "", unit_type: "Piece", quantity: 1, rental_rate: 0, discount: 0, amount: 0, availability: null }])
+    setItems([...items, { item_id: 0, item_name: "", unit_type: "Piece", quantity: 1, days: defaultDays(), rental_rate: 0, discount: 0, amount: 0, availability: null }])
   }
 
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx))
@@ -84,10 +99,11 @@ export default function NewBookingPage() {
     }
 
     // Recalculate amount
-    const qty = updated[idx].quantity
-    const rate = updated[idx].rental_rate
-    const disc = updated[idx].discount
-    updated[idx].amount = qty * rate - disc
+    const qty = updated[idx].quantity || 0
+    const days = updated[idx].days || 1
+    const rate = updated[idx].rental_rate || 0
+    const disc = updated[idx].discount || 0
+    updated[idx].amount = qty * rate * days - disc
 
     setItems(updated)
 
@@ -114,12 +130,15 @@ export default function NewBookingPage() {
   const total = subtotal - disc + gst
 
   const handleSubmit = async () => {
-    if (!form.customer_id || !form.event_date || !form.event_name) {
-      alert("Please fill required fields (Customer, Event Name, Event Date)")
-      return
-    }
+    const e: Record<string, string> = {}
+    if (!form.customer_id) e.customer_id = "Please select a customer"
+    if (!form.event_name.trim()) e.event_name = "Event name is required"
+    if (!form.event_date) e.event_date = "Event date is required"
+    setErrors(e)
+    if (Object.keys(e).length > 0) return
+
     if (items.some((i) => i.availability && !i.availability.available)) {
-      alert("Some items have stock conflicts. Please fix before saving.")
+      setWarning("Some items have stock conflicts. Please fix before saving.")
       return
     }
     setSaving(true)
@@ -133,7 +152,12 @@ export default function NewBookingPage() {
         }),
       })
       const data = await res.json()
-      if (data.booking) router.push(`/bookings/${data.booking.id}`)
+      if (data.booking) {
+        // New booking changes booking lists and dashboard numbers
+        invalidateCache("/api/bookings")
+        invalidateCache("/api/dashboard")
+        router.push(`/bookings/${data.booking.id}`)
+      }
     } finally {
       setSaving(false)
     }
@@ -162,18 +186,25 @@ export default function NewBookingPage() {
             <CardContent className="space-y-3">
               <div>
                 <Label>Customer *</Label>
-                <Select value={form.customer_id} onValueChange={(v) => setForm({ ...form, customer_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
+                <Select value={form.customer_id} onValueChange={(v) => { setForm({ ...form, customer_id: v }); setErrors((p) => ({ ...p, customer_id: "" })) }}>
+                  <SelectTrigger aria-invalid={!!errors.customer_id}><SelectValue placeholder="Select customer" /></SelectTrigger>
                   <SelectContent>
                     {customers.map((c) => (
                       <SelectItem key={c.id} value={String(c.id)}>{c.name} · {c.mobile}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <FieldError msg={errors.customer_id} />
               </div>
               <div>
                 <Label>Event Name *</Label>
-                <Input value={form.event_name} onChange={(e) => setForm({ ...form, event_name: e.target.value })} placeholder="e.g., Sharma Wedding" />
+                <Input
+                  value={form.event_name}
+                  aria-invalid={!!errors.event_name}
+                  onChange={(e) => { setForm({ ...form, event_name: e.target.value }); setErrors((p) => ({ ...p, event_name: "" })) }}
+                  placeholder="e.g., Sharma Wedding"
+                />
+                <FieldError msg={errors.event_name} />
               </div>
               <div>
                 <Label>Event Type</Label>
@@ -187,7 +218,13 @@ export default function NewBookingPage() {
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <Label>Event Date *</Label>
-                  <Input type="date" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} />
+                  <Input
+                    type="date"
+                    value={form.event_date}
+                    aria-invalid={!!errors.event_date}
+                    onChange={(e) => { setForm({ ...form, event_date: e.target.value }); setErrors((p) => ({ ...p, event_date: "" })) }}
+                  />
+                  <FieldError msg={errors.event_date} />
                 </div>
                 <div>
                   <Label>Setup Date</Label>
@@ -248,7 +285,7 @@ export default function NewBookingPage() {
               <div className="space-y-3">
                 {items.map((item, idx) => (
                   <div key={idx} className="rounded-lg border p-3 space-y-2">
-                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
                       <div className="col-span-2">
                         <Label className="text-xs">Item</Label>
                         <Select
@@ -275,7 +312,16 @@ export default function NewBookingPage() {
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">Rate (₹)</Label>
+                        <Label className="text-xs">Days</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.days}
+                          onChange={(e) => updateItem(idx, "days", parseInt(e.target.value))}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Rate (₹/day)</Label>
                         <Input
                           type="number"
                           value={item.rental_rate}
@@ -298,6 +344,11 @@ export default function NewBookingPage() {
                         ) : null}
                       </div>
                       <div className="flex items-center gap-3">
+                        {item.item_id > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            {item.quantity} × {fmt(item.rental_rate)} × {item.days} day{item.days > 1 ? "s" : ""}
+                          </span>
+                        )}
                         <span className="text-sm font-medium">{fmt(item.amount)}</span>
                         <Button variant="ghost" size="icon" className="size-7 text-destructive" onClick={() => removeItem(idx)}>
                           <Trash2Icon className="size-3.5" />
@@ -311,6 +362,14 @@ export default function NewBookingPage() {
           </CardContent>
         </Card>
       </div>
+
+      <NoticeDialog
+        open={!!warning}
+        title="Cannot create booking"
+        description={warning ?? ""}
+        variant="warning"
+        onClose={() => setWarning(null)}
+      />
     </MainLayout>
   )
 }

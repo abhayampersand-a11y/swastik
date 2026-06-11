@@ -16,6 +16,7 @@ import {
   CheckIcon,
   XIcon,
 } from "lucide-react"
+import { Modal, ConfirmDialog } from "@/components/ui/modal"
 
 interface Category {
   id: number
@@ -69,11 +70,8 @@ function CategoryDialog({
     }
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+    <Modal open={open} onClose={onClose} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">
             {category ? "Edit Category" : "New Category"}
@@ -117,8 +115,7 @@ function CategoryDialog({
             {saving ? "Saving..." : category ? "Save Changes" : "Add Category"}
           </Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -128,6 +125,7 @@ export default function CategoriesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<Category | null>(null)
 
   const fetchCategories = useCallback(async () => {
     setLoading(true)
@@ -139,15 +137,20 @@ export default function CategoriesPage() {
 
   useEffect(() => { fetchCategories() }, [fetchCategories])
 
-  const handleDelete = async (cat: Category) => {
+  const requestDelete = (cat: Category) => {
     if (cat.item_count > 0) {
       setDeleteError(`"${cat.name}" has ${cat.item_count} item(s). Remove them first.`)
       setTimeout(() => setDeleteError(null), 4000)
       return
     }
-    if (!confirm(`Delete category "${cat.name}"?`)) return
-    const res = await fetch(`/api/inventory/categories/${cat.id}`, { method: "DELETE" })
+    setDeleting(cat)
+  }
+
+  const handleDelete = async () => {
+    if (!deleting) return
+    const res = await fetch(`/api/inventory/categories/${deleting.id}`, { method: "DELETE" })
     const data = await res.json()
+    setDeleting(null)
     if (!res.ok) {
       setDeleteError(data.error)
       setTimeout(() => setDeleteError(null), 4000)
@@ -254,7 +257,7 @@ export default function CategoriesPage() {
                           variant="ghost"
                           size="icon"
                           className="size-8 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(cat)}
+                          onClick={() => requestDelete(cat)}
                           title="Delete"
                           disabled={cat.item_count > 0}
                         >
@@ -280,6 +283,16 @@ export default function CategoriesPage() {
         onClose={() => setDialogOpen(false)}
         category={editing}
         onSaved={fetchCategories}
+      />
+
+      <ConfirmDialog
+        open={!!deleting}
+        title="Delete category?"
+        description={deleting ? `Category "${deleting.name}" will be permanently removed.` : ""}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+        onCancel={() => setDeleting(null)}
       />
     </MainLayout>
   )

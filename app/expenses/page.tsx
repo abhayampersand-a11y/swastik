@@ -12,6 +12,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { PlusIcon, Trash2Icon, TrendingDownIcon } from "lucide-react"
+import { Modal, ConfirmDialog } from "@/components/ui/modal"
+import { FieldError } from "@/components/ui/field-error"
 
 interface Expense {
   id: number
@@ -31,8 +33,13 @@ function ExpenseDialog({ open, onClose, onSaved }: { open: boolean; onClose: () 
     description: "",
   })
   const [saving, setSaving] = useState(false)
+  const [amountError, setAmountError] = useState("")
 
   const handleSave = async () => {
+    if (!form.amount || parseFloat(form.amount) <= 0) {
+      setAmountError("Please enter a valid amount")
+      return
+    }
     setSaving(true)
     try {
       await fetch("/api/expenses", {
@@ -45,10 +52,8 @@ function ExpenseDialog({ open, onClose, onSaved }: { open: boolean; onClose: () 
     } finally { setSaving(false) }
   }
 
-  if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+    <Modal open={open} onClose={onClose} className="space-y-4">
         <h2 className="text-lg font-semibold">Add Expense</h2>
         <div className="space-y-3">
           <div>
@@ -66,7 +71,13 @@ function ExpenseDialog({ open, onClose, onSaved }: { open: boolean; onClose: () 
           </div>
           <div>
             <Label>Amount (₹) *</Label>
-            <Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+            <Input
+              type="number"
+              value={form.amount}
+              aria-invalid={!!amountError}
+              onChange={(e) => { setForm({ ...form, amount: e.target.value }); setAmountError("") }}
+            />
+            <FieldError msg={amountError} />
           </div>
           <div>
             <Label>Description</Label>
@@ -75,10 +86,9 @@ function ExpenseDialog({ open, onClose, onSaved }: { open: boolean; onClose: () 
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !form.amount}>{saving ? "Saving..." : "Add Expense"}</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Add Expense"}</Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -90,6 +100,7 @@ export default function ExpensesPage() {
   const [month, setMonth] = useState(String(now.getMonth() + 1))
   const [year, setYear] = useState(String(now.getFullYear()))
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const MONTHS_LIST = [
     "", "January", "February", "March", "April", "May", "June",
@@ -107,16 +118,17 @@ export default function ExpensesPage() {
 
   useEffect(() => { fetchExpenses() }, [fetchExpenses])
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Delete this expense?")) return
-    await fetch(`/api/expenses?id=${id}`, { method: "DELETE" })
+  const handleDelete = async () => {
+    if (deletingId === null) return
+    await fetch(`/api/expenses?id=${deletingId}`, { method: "DELETE" })
+    setDeletingId(null)
     fetchExpenses()
   }
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n)
 
-  const total = expenses.reduce((s, e) => s + e.amount, 0)
+  const total = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0)
 
   return (
     <MainLayout>
@@ -187,7 +199,7 @@ export default function ExpensesPage() {
                     <td className="p-3 hidden md:table-cell text-muted-foreground">{e.description}</td>
                     <td className="p-3 text-right font-medium">{fmt(e.amount)}</td>
                     <td className="p-3 text-right">
-                      <Button variant="ghost" size="icon" className="size-7 text-destructive" onClick={() => handleDelete(e.id)}>
+                      <Button variant="ghost" size="icon" className="size-7 text-destructive" onClick={() => setDeletingId(e.id)}>
                         <Trash2Icon className="size-3.5" />
                       </Button>
                     </td>
@@ -206,6 +218,15 @@ export default function ExpensesPage() {
         )}
       </div>
       <ExpenseDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSaved={fetchExpenses} />
+      <ConfirmDialog
+        open={deletingId !== null}
+        title="Delete expense?"
+        description="This expense entry will be permanently removed."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+        onCancel={() => setDeletingId(null)}
+      />
     </MainLayout>
   )
 }

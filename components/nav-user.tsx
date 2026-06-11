@@ -21,6 +21,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { EllipsisVerticalIcon, CircleUserRoundIcon, CreditCardIcon, BellIcon, LogOutIcon } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { ConfirmDialog } from "@/components/ui/modal"
+import { persistor } from "@/lib/redux/store"
 
 export function NavUser({
   user,
@@ -32,6 +36,16 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const [logoutConfirm, setLogoutConfirm] = useState(false)
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" })
+    await persistor.purge() // clear cached business data from localStorage
+    setLogoutConfirm(false)
+    router.push("/login")
+    router.refresh()
+  }
 
   return (
     <SidebarMenu>
@@ -94,7 +108,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLogoutConfirm(true)}>
               <LogOutIcon
               />
               Log out
@@ -102,6 +116,16 @@ export function NavUser({
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
+
+      <ConfirmDialog
+        open={logoutConfirm}
+        title="Log out?"
+        description="You will need to sign in again to access the dashboard."
+        confirmLabel="Log out"
+        cancelLabel="Cancel"
+        onConfirm={handleLogout}
+        onCancel={() => setLogoutConfirm(false)}
+      />
     </SidebarMenu>
   )
 }

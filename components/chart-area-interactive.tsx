@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts"
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ReferenceLine } from "recharts"
 
 import {
   Card,
@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useCachedApi } from "@/lib/redux/hooks"
 
 interface ChartPoint {
   month: string
@@ -36,20 +37,11 @@ function formatINR(value: number) {
 }
 
 export function ChartAreaInteractive() {
-  const [data, setData] = React.useState<ChartPoint[]>([])
   const [year, setYear] = React.useState(String(new Date().getFullYear()))
-  const [loading, setLoading] = React.useState(true)
-
-  React.useEffect(() => {
-    setLoading(true)
-    fetch(`/api/dashboard/charts?year=${year}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setData(d.monthly ?? [])
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [year])
+  const { data: chartData, loading } = useCachedApi<{ monthly: ChartPoint[] }>(
+    `/api/dashboard/charts?year=${year}`
+  )
+  const data = chartData?.monthly ?? []
 
   const years = ["2024", "2025", "2026"]
 
@@ -81,8 +73,8 @@ export function ChartAreaInteractive() {
               <AreaChart data={data}>
                 <defs>
                   <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.1} />
+                    <stop offset="5%" stopColor="#16a34a" stopOpacity={0.8} />
+                    <stop offset="95%" stopColor="#16a34a" stopOpacity={0.1} />
                   </linearGradient>
                   <linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
@@ -98,7 +90,7 @@ export function ChartAreaInteractive() {
                     name === "revenue" ? "Revenue" : "Expenses",
                   ]}
                 />
-                <Area dataKey="revenue" type="monotone" fill="url(#revGrad)" stroke="var(--primary)" strokeWidth={2} />
+                <Area dataKey="revenue" type="monotone" fill="url(#revGrad)" stroke="#16a34a" strokeWidth={2} />
                 <Area dataKey="expenses" type="monotone" fill="url(#expGrad)" stroke="#ef4444" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
@@ -122,12 +114,12 @@ export function ChartAreaInteractive() {
                 <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
                 <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(value: unknown) => [formatINR(Number(value)), "Net Profit"]} />
-                <Bar
-                  dataKey="profit"
-                  fill="var(--primary)"
-                  radius={[4, 4, 0, 0]}
-                  name="Net Profit"
-                />
+                <ReferenceLine y={0} stroke="#9ca3af" />
+                <Bar dataKey="profit" radius={[4, 4, 0, 0]} name="Net Profit">
+                  {data.map((d, i) => (
+                    <Cell key={i} fill={d.profit >= 0 ? "#16a34a" : "#dc2626"} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}

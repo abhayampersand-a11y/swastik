@@ -17,11 +17,14 @@ export async function POST(req: NextRequest) {
   try {
     const { name, mobile, address, joining_date, salary_type, basic_salary, overtime_rate, notes } =
       await req.json()
+    if (!name?.trim()) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 })
+    }
     const [laborer] = await query(
       `INSERT INTO laborers (name, mobile, address, joining_date, salary_type, basic_salary, overtime_rate, notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [name, mobile, address, joining_date, salary_type ?? "Monthly",
-       basic_salary ?? 0, overtime_rate ?? 0, notes]
+      [name, mobile, address, joining_date || null, salary_type ?? "Monthly",
+       Number(basic_salary) || 0, Number(overtime_rate) || 0, notes]
     )
     return NextResponse.json({ laborer }, { status: 201 })
   } catch (e) {

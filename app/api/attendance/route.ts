@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
       sql += ` AND EXTRACT(MONTH FROM a.attendance_date)=$${params.length - 1}
                AND EXTRACT(YEAR FROM a.attendance_date)=$${params.length}`
     }
-    if (laborer_id) {
+    // Ignore non-numeric values like "all" — they mean no filter
+    if (laborer_id && /^\d+$/.test(laborer_id)) {
       params.push(laborer_id)
       sql += ` AND a.laborer_id=$${params.length}`
     }

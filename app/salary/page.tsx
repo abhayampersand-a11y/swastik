@@ -9,9 +9,22 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { BanknoteIcon, Calculator, CheckCircleIcon } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { BanknoteIcon, Calculator, CheckCircleIcon, HandCoinsIcon } from "lucide-react"
+import { Modal } from "@/components/ui/modal"
+import { FieldError } from "@/components/ui/field-error"
+import { useCachedApi } from "@/lib/redux/hooks"
 
 interface Laborer { id: number; name: string; salary_type: string; basic_salary: number }
+interface Advance {
+  id: number
+  laborer_id: number
+  amount: number
+  pending_amount: number
+  monthly_deduction: number | null
+  is_recovered: boolean
+}
 interface Salary {
   id: number
   laborer_id: number
@@ -34,13 +47,26 @@ export default function SalaryPage() {
   const now = new Date()
   const [month, setMonth] = useState(String(now.getMonth() + 1))
   const [year, setYear] = useState(String(now.getFullYear()))
-  const [laborers, setLaborers] = useState<Laborer[]>([])
+  const { data: laborersData } = useCachedApi<{ laborers: Laborer[] }>("/api/laborers")
+  const laborers = laborersData?.laborers ?? []
   const [salaries, setSalaries] = useState<Salary[]>([])
+  const [advances, setAdvances] = useState<Advance[]>([])
   const [loading, setLoading] = useState(false)
   const [calculating, setCalculating] = useState<number | null>(null)
+  const [advanceFor, setAdvanceFor] = useState<Laborer | null>(null)
+  const [advForm, setAdvForm] = useState({
+    amount: "",
+    monthly_deduction: "",
+    reason: "",
+    date: new Date().toISOString().split("T")[0],
+  })
+  const [advError, setAdvError] = useState("")
+
+  const fetchAdvances = () =>
+    fetch("/api/labor-advances").then((r) => r.json()).then((d) => setAdvances(d.advances ?? []))
 
   useEffect(() => {
-    fetch("/api/laborers").then((r) => r.json()).then((d) => setLaborers(d.laborers ?? []))
+    fetchAdvances()
   }, [])
 
   const fetchSalaries = async () => {
@@ -71,6 +97,29 @@ export default function SalaryPage() {
       body: JSON.stringify({ salary_id, payment_date: new Date().toISOString().split("T")[0] }),
     })
     fetchSalaries()
+    fetchAdvances()
+  }
+
+  const giveAdvance = async () => {
+    if (!advanceFor) return
+    if (!advForm.amount || parseFloat(advForm.amount) <= 0) {
+      setAdvError("Please enter a valid advance amount")
+      return
+    }
+    await fetch("/api/labor-advances", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        laborer_id: advanceFor.id,
+        advance_date: advForm.date,
+        amount: parseFloat(advForm.amount),
+        reason: advForm.reason,
+        monthly_deduction: advForm.monthly_deduction,
+      }),
+    })
+    setAdvanceFor(null)
+    setAdvForm({ amount: "", monthly_deduction: "", reason: "", date: new Date().toISOString().split("T")[0] })
+    fetchAdvances()
   }
 
   const calculateAll = async () => {
@@ -83,6 +132,11 @@ export default function SalaryPage() {
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n)
 
   const salaryMap = Object.fromEntries(salaries.map((s) => [s.laborer_id, s]))
+
+  const pendingAdvanceFor = (laborer_id: number) =>
+    advances
+      .filter((a) => a.laborer_id === laborer_id && !a.is_recovered)
+      .reduce((sum, a) => sum + Number(a.pending_amount), 0)
 
   return (
     <MainLayout>
@@ -119,6 +173,7 @@ export default function SalaryPage() {
           <div className="space-y-3">
             {laborers.map((l) => {
               const s = salaryMap[l.id]
+              const pendingAdv = pendingAdvanceFor(l.id)
               return (
                 <Card key={l.id}>
                   <CardContent className="pt-4">
@@ -126,6 +181,11 @@ export default function SalaryPage() {
                       <div>
                         <div className="font-medium">{l.name}</div>
                         <div className="text-xs text-muted-foreground">{l.salary_type} · {fmt(l.basic_salary)}/mo</div>
+                        {pendingAdv > 0 && (
+                          <div className="mt-1 text-xs font-medium text-orange-600">
+                            Advance pending: {fmt(pendingAdv)}
+                          </div>
+                        )}
                       </div>
                       {s ? (
                         <div className="flex items-center gap-3 flex-wrap">
@@ -136,6 +196,9 @@ export default function SalaryPage() {
                           </div>
                           <div className="font-semibold text-lg">{fmt(s.net_salary)}</div>
                           <Badge variant={s.status === "Paid" ? "default" : "secondary"}>{s.status}</Badge>
+                          <Button size="sm" variant="outline" onClick={() => setAdvanceFor(l)}>
+                            <HandCoinsIcon className="size-3.5 mr-1" /> Advance
+                          </Button>
                           {s.status !== "Paid" && (
                             <Button size="sm" onClick={() => markPaid(s.id)}>
                               <CheckCircleIcon className="size-3.5 mr-1" /> Mark Paid
@@ -143,15 +206,20 @@ export default function SalaryPage() {
                           )}
                         </div>
                       ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => calculateSalary(l.id)}
-                          disabled={calculating === l.id}
-                        >
-                          <Calculator className="size-3.5 mr-1" />
-                          {calculating === l.id ? "Calculating..." : "Calculate"}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => setAdvanceFor(l)}>
+                            <HandCoinsIcon className="size-3.5 mr-1" /> Advance
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => calculateSalary(l.id)}
+                            disabled={calculating === l.id}
+                          >
+                            <Calculator className="size-3.5 mr-1" />
+                            {calculating === l.id ? "Calculating..." : "Calculate"}
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </CardContent>
@@ -161,6 +229,54 @@ export default function SalaryPage() {
           </div>
         )}
       </div>
+
+      {/* Give Advance Dialog */}
+      <Modal open={!!advanceFor} onClose={() => setAdvanceFor(null)} className="space-y-4">
+            <h2 className="text-lg font-semibold">Give Advance — {advanceFor?.name}</h2>
+            <div className="space-y-3">
+              <div>
+                <Label>Advance Amount (₹) *</Label>
+                <Input
+                  type="number"
+                  value={advForm.amount}
+                  aria-invalid={!!advError}
+                  onChange={(e) => { setAdvForm({ ...advForm, amount: e.target.value }); setAdvError("") }}
+                  placeholder="e.g., 15000"
+                />
+                <FieldError msg={advError} />
+              </div>
+              <div>
+                <Label>Recover Per Month (₹)</Label>
+                <Input
+                  type="number"
+                  value={advForm.monthly_deduction}
+                  onChange={(e) => setAdvForm({ ...advForm, monthly_deduction: e.target.value })}
+                  placeholder="e.g., 5000 — leave empty for full recovery"
+                />
+                {advForm.amount && advForm.monthly_deduction && parseFloat(advForm.monthly_deduction) > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Will be recovered in {Math.ceil(parseFloat(advForm.amount) / parseFloat(advForm.monthly_deduction))} month(s)
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label>Date</Label>
+                <Input type="date" value={advForm.date} onChange={(e) => setAdvForm({ ...advForm, date: e.target.value })} />
+              </div>
+              <div>
+                <Label>Reason</Label>
+                <Input
+                  value={advForm.reason}
+                  onChange={(e) => setAdvForm({ ...advForm, reason: e.target.value })}
+                  placeholder="e.g., Family emergency"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setAdvanceFor(null)}>Cancel</Button>
+              <Button onClick={giveAdvance}>Give Advance</Button>
+            </div>
+      </Modal>
     </MainLayout>
   )
 }

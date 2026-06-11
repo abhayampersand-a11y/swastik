@@ -10,6 +10,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Label } from "@/components/ui/label"
 import { PlusIcon, SearchIcon, EditIcon, Trash2Icon, UsersIcon, PhoneIcon } from "lucide-react"
 import Link from "next/link"
+import { Modal, ConfirmDialog } from "@/components/ui/modal"
+import { FieldError } from "@/components/ui/field-error"
+import { useInvalidate } from "@/lib/redux/hooks"
 
 interface Customer {
   id: number
@@ -32,6 +35,8 @@ function CustomerDialog({
 }) {
   const [form, setForm] = useState({ name: "", mobile: "", alternate_mobile: "", address: "", city: "", notes: "" })
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const invalidateCache = useInvalidate()
 
   useEffect(() => {
     if (customer) {
@@ -46,9 +51,16 @@ function CustomerDialog({
     } else {
       setForm({ name: "", mobile: "", alternate_mobile: "", address: "", city: "", notes: "" })
     }
+    setErrors({})
   }, [customer, open])
 
   const handleSave = async () => {
+    const e: Record<string, string> = {}
+    if (!form.name.trim()) e.name = "Customer name is required"
+    if (!form.mobile.trim()) e.mobile = "Mobile number is required"
+    setErrors(e)
+    if (Object.keys(e).length > 0) return
+
     setSaving(true)
     try {
       const url = customer ? `/api/customers/${customer.id}` : "/api/customers"
@@ -57,6 +69,7 @@ function CustomerDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       })
+      invalidateCache("/api/customers")
       onSaved()
       onClose()
     } finally {
@@ -64,21 +77,28 @@ function CustomerDialog({
     }
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+    <Modal open={open} onClose={onClose} className="max-w-md space-y-4">
         <h2 className="text-lg font-semibold">{customer ? "Edit Customer" : "Add Customer"}</h2>
         <div className="space-y-3">
           <div>
             <Label>Name *</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input
+              value={form.name}
+              aria-invalid={!!errors.name}
+              onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((p) => ({ ...p, name: "" })) }}
+            />
+            <FieldError msg={errors.name} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Mobile *</Label>
-              <Input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
+              <Input
+                value={form.mobile}
+                aria-invalid={!!errors.mobile}
+                onChange={(e) => { setForm({ ...form, mobile: e.target.value }); setErrors((p) => ({ ...p, mobile: "" })) }}
+              />
+              <FieldError msg={errors.mobile} />
             </div>
             <div>
               <Label>Alternate Mobile</Label>
@@ -100,12 +120,11 @@ function CustomerDialog({
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !form.name || !form.mobile}>
+          <Button onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : customer ? "Save Changes" : "Add Customer"}
           </Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -115,6 +134,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
+  const [deleting, setDeleting] = useState<Customer | null>(null)
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -128,9 +148,10 @@ export default function CustomersPage() {
 
   useEffect(() => { fetchCustomers() }, [fetchCustomers])
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Delete this customer?")) return
-    await fetch(`/api/customers/${id}`, { method: "DELETE" })
+  const handleDelete = async () => {
+    if (!deleting) return
+    await fetch(`/api/customers/${deleting.id}`, { method: "DELETE" })
+    setDeleting(null)
     fetchCustomers()
   }
 
@@ -202,7 +223,7 @@ export default function CustomersPage() {
                   <Button variant="ghost" size="icon" onClick={() => { setEditing(c); setDialogOpen(true) }}>
                     <EditIcon className="size-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(c.id)}>
+                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleting(c)}>
                     <Trash2Icon className="size-4" />
                   </Button>
                 </div>
@@ -217,6 +238,16 @@ export default function CustomersPage() {
         onClose={() => setDialogOpen(false)}
         customer={editing}
         onSaved={fetchCustomers}
+      />
+
+      <ConfirmDialog
+        open={!!deleting}
+        title="Delete customer?"
+        description={deleting ? `"${deleting.name}" and their details will be permanently removed.` : ""}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+        onCancel={() => setDeleting(null)}
       />
     </MainLayout>
   )

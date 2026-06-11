@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
       WHERE 1=1
     `
     const params: unknown[] = []
-    if (booking_id) {
+    if (booking_id && /^\d+$/.test(booking_id)) {
       params.push(booking_id)
       sql += ` AND p.booking_id = $${params.length}`
     }

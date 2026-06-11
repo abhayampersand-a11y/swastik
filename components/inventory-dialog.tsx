@@ -7,6 +7,9 @@ import { Label } from "@/components/ui/label"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
+import { Modal } from "@/components/ui/modal"
+import { FieldError } from "@/components/ui/field-error"
+import { useInvalidate } from "@/lib/redux/hooks"
 
 interface Props {
   open: boolean
@@ -30,8 +33,11 @@ export function InventoryDialog({ open, onClose, categories, item, onSaved }: Pr
     low_stock_threshold: "10",
   })
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const invalidateCache = useInvalidate()
 
   useEffect(() => {
+    setErrors({})
     if (item) {
       setForm({
         category_id: String(item.category_id ?? ""),
@@ -54,6 +60,12 @@ export function InventoryDialog({ open, onClose, categories, item, onSaved }: Pr
   }, [item, open])
 
   const handleSave = async () => {
+    const e: Record<string, string> = {}
+    if (!form.name.trim()) e.name = "Item name is required"
+    if (!form.category_id) e.category_id = "Please select a category"
+    setErrors(e)
+    if (Object.keys(e).length > 0) return
+
     setSaving(true)
     try {
       const url = item ? `/api/inventory/${item.id}` : "/api/inventory"
@@ -68,6 +80,7 @@ export function InventoryDialog({ open, onClose, categories, item, onSaved }: Pr
         low_stock_threshold: parseInt(form.low_stock_threshold),
       }
       await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      invalidateCache("/api/inventory")
       onSaved()
       onClose()
     } finally {
@@ -75,21 +88,24 @@ export function InventoryDialog({ open, onClose, categories, item, onSaved }: Pr
     }
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+    <Modal open={open} onClose={onClose} className="max-w-md space-y-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold">{item ? "Edit Item" : "Add Inventory Item"}</h2>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <Label>Item Name *</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Plastic Chair" />
+            <Input
+              value={form.name}
+              aria-invalid={!!errors.name}
+              onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((p) => ({ ...p, name: "" })) }}
+              placeholder="e.g., Plastic Chair"
+            />
+            <FieldError msg={errors.name} />
           </div>
           <div>
-            <Label>Category</Label>
-            <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
+            <Label>Category *</Label>
+            <Select value={form.category_id} onValueChange={(v) => { setForm({ ...form, category_id: v }); setErrors((p) => ({ ...p, category_id: "" })) }}>
               <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
               <SelectContent>
                 {categories.map((c) => (
@@ -97,6 +113,7 @@ export function InventoryDialog({ open, onClose, categories, item, onSaved }: Pr
                 ))}
               </SelectContent>
             </Select>
+            <FieldError msg={errors.category_id} />
           </div>
           <div>
             <Label>Unit Type</Label>
@@ -133,11 +150,10 @@ export function InventoryDialog({ open, onClose, categories, item, onSaved }: Pr
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !form.name}>
+          <Button onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : item ? "Save Changes" : "Add Item"}
           </Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

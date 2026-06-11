@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { query, withTransaction } from "@/lib/db"
 
 export async function GET(req: NextRequest) {
   const month = req.nextUrl.searchParams.get("month")
@@ -68,14 +68,28 @@ export async function POST(req: NextRequest) {
 
     const overtimeAmount = totalOT * parseFloat(overtime_rate)
 
-    // Pending advances
-    const advRow = await query<{ total: string }>(
-      "SELECT COALESCE(SUM(amount),0) as total FROM labor_advances WHERE laborer_id=$1 AND is_recovered=FALSE",
+    // Pending advances — deduct only this month's installment per advance.
+    // monthly_deduction NULL means "recover as much as possible".
+    const advances = await query<{ pending: string; monthly_deduction: string | null }>(
+      `SELECT (amount - recovered_amount) as pending, monthly_deduction
+       FROM labor_advances
+       WHERE laborer_id=$1 AND is_recovered=FALSE AND amount > recovered_amount
+       ORDER BY advance_date, id`,
       [laborer_id]
     )
-    const advanceDeduction = parseFloat(advRow[0]?.total ?? "0")
 
-    const netSalary = baseSalaryCalc + overtimeAmount - advanceDeduction - parseFloat(other_deductions)
+    const grossPay = baseSalaryCalc + overtimeAmount - parseFloat(other_deductions)
+    let advanceDeduction = 0
+    for (const adv of advances) {
+      const pending = parseFloat(adv.pending)
+      const installment = adv.monthly_deduction
+        ? Math.min(parseFloat(adv.monthly_deduction), pending)
+        : pending
+      // Never deduct beyond what's left of this month's pay
+      advanceDeduction += Math.min(installment, Math.max(0, grossPay - advanceDeduction))
+    }
+
+    const netSalary = grossPay - advanceDeduction
 
     const [salary] = await query(
       `INSERT INTO salaries
@@ -101,18 +115,46 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  // Mark salary as paid
+  // Mark salary as paid and apply this month's deduction to advances (oldest first)
   try {
     const { salary_id, payment_date } = await req.json()
-    const [salary] = await query(
-      `UPDATE salaries SET status='Paid', payment_date=$1 WHERE id=$2 RETURNING *`,
-      [payment_date, salary_id]
-    )
-    // Mark advances as recovered
-    await query(
-      "UPDATE labor_advances SET is_recovered=TRUE WHERE laborer_id=$1 AND is_recovered=FALSE",
-      [salary.laborer_id]
-    )
+
+    const salary = await withTransaction(async (client) => {
+      const { rows: [salary] } = await client.query(
+        `UPDATE salaries SET status='Paid', payment_date=$1 WHERE id=$2 RETURNING *`,
+        [payment_date, salary_id]
+      )
+
+      let toRecover = parseFloat(salary.advance_deduction) || 0
+      if (toRecover > 0) {
+        const { rows: advances } = await client.query<{
+          id: number; amount: string; recovered_amount: string
+        }>(
+          `SELECT id, amount, recovered_amount FROM labor_advances
+           WHERE laborer_id=$1 AND is_recovered=FALSE AND amount > recovered_amount
+           ORDER BY advance_date, id
+           FOR UPDATE`,
+          [salary.laborer_id]
+        )
+
+        for (const adv of advances) {
+          if (toRecover <= 0) break
+          const pending = parseFloat(adv.amount) - parseFloat(adv.recovered_amount)
+          const portion = Math.min(pending, toRecover)
+          await client.query(
+            `UPDATE labor_advances SET
+             recovered_amount = recovered_amount + $1,
+             is_recovered = (recovered_amount + $1 >= amount)
+             WHERE id=$2`,
+            [portion, adv.id]
+          )
+          toRecover -= portion
+        }
+      }
+
+      return salary
+    })
+
     return NextResponse.json({ salary })
   } catch (e) {
     console.error(e)

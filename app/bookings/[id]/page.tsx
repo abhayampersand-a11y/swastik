@@ -12,7 +12,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { CalendarIcon, PhoneIcon, MapPinIcon, PlusIcon } from "lucide-react"
+import { CalendarIcon, PhoneIcon, MapPinIcon, PlusIcon, FileTextIcon, ReceiptIcon } from "lucide-react"
+import { Modal } from "@/components/ui/modal"
+import { FieldError } from "@/components/ui/field-error"
+import { useInvalidate } from "@/lib/redux/hooks"
 
 const STATUS_LIST = ["Inquiry", "Estimated", "Confirmed", "Running", "Completed", "Closed", "Cancelled"]
 const statusColor: Record<string, string> = {
@@ -27,6 +30,8 @@ export default function BookingDetailPage() {
   const [loading, setLoading] = useState(true)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [payForm, setPayForm] = useState({ amount: "", method: "Cash", notes: "", date: new Date().toISOString().split("T")[0] })
+  const [payError, setPayError] = useState("")
+  const invalidateCache = useInvalidate()
   const [updatingStatus, setUpdatingStatus] = useState(false)
 
   const fetchData = async () => {
@@ -46,11 +51,18 @@ export default function BookingDetailPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...booking, status: newStatus }),
     })
+    invalidateCache("/api/bookings")
+    invalidateCache("/api/dashboard")
+    invalidateCache("/api/inventory")
     fetchData()
     setUpdatingStatus(false)
   }
 
   const handleAddPayment = async () => {
+    if (!payForm.amount || parseFloat(payForm.amount) <= 0) {
+      setPayError("Please enter a valid amount")
+      return
+    }
     const booking = data?.booking as Record<string, unknown>
     await fetch("/api/payments", {
       method: "POST",
@@ -66,6 +78,9 @@ export default function BookingDetailPage() {
     })
     setPaymentOpen(false)
     setPayForm({ amount: "", method: "Cash", notes: "", date: new Date().toISOString().split("T")[0] })
+    invalidateCache("/api/bookings")
+    invalidateCache("/api/dashboard")
+    invalidateCache("/api/payments")
     fetchData()
   }
 
@@ -100,8 +115,16 @@ export default function BookingDetailPage() {
             </div>
             <div className="text-sm text-muted-foreground">{booking.booking_number}</div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => router.back()}>Back</Button>
+            <Button variant="outline" onClick={() => window.open(`/bookings/${id}/estimate`, "_blank")}>
+              <FileTextIcon className="size-4 mr-1" /> Estimate PDF
+            </Button>
+            {payments.length > 0 && (
+              <Button variant="outline" onClick={() => window.open(`/bookings/${id}/invoice`, "_blank")}>
+                <ReceiptIcon className="size-4 mr-1" /> Invoice PDF
+              </Button>
+            )}
             <Button onClick={() => setPaymentOpen(true)}>
               <PlusIcon className="size-4 mr-1" /> Add Payment
             </Button>
@@ -174,7 +197,8 @@ export default function BookingDetailPage() {
                   <tr className="text-left text-muted-foreground border-b">
                     <th className="pb-2">Item</th>
                     <th className="pb-2 text-right">Qty</th>
-                    <th className="pb-2 text-right">Rate</th>
+                    <th className="pb-2 text-right">Days</th>
+                    <th className="pb-2 text-right">Rate/Day</th>
                     <th className="pb-2 text-right">Amount</th>
                   </tr>
                 </thead>
@@ -183,6 +207,7 @@ export default function BookingDetailPage() {
                     <tr key={i}>
                       <td className="py-2">{item.item_name as string} <span className="text-muted-foreground text-xs">({item.unit_type as string})</span></td>
                       <td className="py-2 text-right">{item.quantity as number}</td>
+                      <td className="py-2 text-right">{(item.days as number) ?? 1}</td>
                       <td className="py-2 text-right">{fmt(item.rental_rate as number)}</td>
                       <td className="py-2 text-right font-medium">{fmt(item.amount as number)}</td>
                     </tr>
@@ -219,14 +244,18 @@ export default function BookingDetailPage() {
       </div>
 
       {/* Payment Dialog */}
-      {paymentOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-background rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+      <Modal open={paymentOpen} onClose={() => setPaymentOpen(false)} className="space-y-4">
             <h2 className="text-lg font-semibold">Add Payment</h2>
             <div className="space-y-3">
               <div>
                 <Label>Amount (₹) *</Label>
-                <Input type="number" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} />
+                <Input
+                  type="number"
+                  value={payForm.amount}
+                  aria-invalid={!!payError}
+                  onChange={(e) => { setPayForm({ ...payForm, amount: e.target.value }); setPayError("") }}
+                />
+                <FieldError msg={payError} />
               </div>
               <div>
                 <Label>Payment Method</Label>
@@ -250,11 +279,9 @@ export default function BookingDetailPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddPayment} disabled={!payForm.amount}>Add Payment</Button>
+              <Button onClick={handleAddPayment}>Add Payment</Button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </MainLayout>
   )
 }

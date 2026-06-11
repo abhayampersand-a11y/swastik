@@ -13,6 +13,9 @@ import {
 } from "@/components/ui/select"
 import { PlusIcon, EditIcon, HardHatIcon, PhoneIcon } from "lucide-react"
 import Link from "next/link"
+import { Modal } from "@/components/ui/modal"
+import { FieldError } from "@/components/ui/field-error"
+import { useInvalidate } from "@/lib/redux/hooks"
 
 interface Laborer {
   id: number
@@ -34,8 +37,11 @@ function LaborerDialog({ open, onClose, laborer, onSaved }: {
     basic_salary: "", overtime_rate: "", notes: "",
   })
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const invalidateCache = useInvalidate()
 
   useEffect(() => {
+    setErrors({})
     if (laborer) {
       setForm({
         name: laborer.name ?? "",
@@ -53,6 +59,13 @@ function LaborerDialog({ open, onClose, laborer, onSaved }: {
   }, [laborer, open])
 
   const handleSave = async () => {
+    const e: Record<string, string> = {}
+    if (!form.name.trim()) e.name = "Laborer name is required"
+    if (!form.basic_salary || parseFloat(form.basic_salary) <= 0)
+      e.basic_salary = "Basic salary is required"
+    setErrors(e)
+    if (Object.keys(e).length > 0) return
+
     setSaving(true)
     try {
       const url = laborer ? `/api/laborers/${laborer.id}` : "/api/laborers"
@@ -61,18 +74,25 @@ function LaborerDialog({ open, onClose, laborer, onSaved }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, basic_salary: parseFloat(form.basic_salary), overtime_rate: parseFloat(form.overtime_rate) }),
       })
+      invalidateCache("/api/laborers")
       onSaved()
       onClose()
     } finally { setSaving(false) }
   }
 
-  if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+    <Modal open={open} onClose={onClose} className="max-w-md space-y-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold">{laborer ? "Edit Laborer" : "Add Laborer"}</h2>
         <div className="space-y-3">
-          <div><Label>Name *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+          <div>
+            <Label>Name *</Label>
+            <Input
+              value={form.name}
+              aria-invalid={!!errors.name}
+              onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((p) => ({ ...p, name: "" })) }}
+            />
+            <FieldError msg={errors.name} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Mobile</Label><Input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} /></div>
             <div><Label>Joining Date</Label><Input type="date" value={form.joining_date} onChange={(e) => setForm({ ...form, joining_date: e.target.value })} /></div>
@@ -89,17 +109,25 @@ function LaborerDialog({ open, onClose, laborer, onSaved }: {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Basic Salary (₹)</Label><Input type="number" value={form.basic_salary} onChange={(e) => setForm({ ...form, basic_salary: e.target.value })} /></div>
+            <div>
+              <Label>Basic Salary (₹) *</Label>
+              <Input
+                type="number"
+                value={form.basic_salary}
+                aria-invalid={!!errors.basic_salary}
+                onChange={(e) => { setForm({ ...form, basic_salary: e.target.value }); setErrors((p) => ({ ...p, basic_salary: "" })) }}
+              />
+              <FieldError msg={errors.basic_salary} />
+            </div>
             <div><Label>OT Rate/hr (₹)</Label><Input type="number" value={form.overtime_rate} onChange={(e) => setForm({ ...form, overtime_rate: e.target.value })} /></div>
           </div>
           <div><Label>Notes</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !form.name}>{saving ? "Saving..." : laborer ? "Save Changes" : "Add Laborer"}</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : laborer ? "Save Changes" : "Add Laborer"}</Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

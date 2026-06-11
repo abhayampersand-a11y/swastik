@@ -10,6 +10,7 @@ import Link from "next/link"
 
 interface Payment {
   id: number
+  booking_id: number
   booking_number: string
   customer_name: string
   payment_date: string
@@ -41,7 +42,7 @@ export default function PaymentsPage() {
     Cheque: "outline",
   }
 
-  const total = payments.reduce((s, p) => s + p.amount, 0)
+  const total = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
 
   return (
     <MainLayout>
@@ -76,7 +77,7 @@ export default function PaymentsPage() {
                     <td className="p-3 text-muted-foreground">{new Date(p.payment_date).toLocaleDateString("en-IN")}</td>
                     <td className="p-3 font-medium">{p.customer_name}</td>
                     <td className="p-3 hidden sm:table-cell">
-                      <Link href={`/bookings/${p.id}`} className="text-primary hover:underline text-xs font-mono">
+                      <Link href={`/bookings/${p.booking_id}`} className="text-primary hover:underline text-xs font-mono">
                         {p.booking_number}
                       </Link>
                     </td>
