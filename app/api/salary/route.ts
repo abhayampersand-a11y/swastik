@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, withTransaction } from "@/lib/db"
+import { notify } from "@/lib/notifications"
 
 export async function GET(req: NextRequest) {
   const month = req.nextUrl.searchParams.get("month")
@@ -29,14 +30,14 @@ export async function POST(req: NextRequest) {
     const { laborer_id, month, year, other_deductions = 0, payment_method, notes } = await req.json()
 
     const laborer = await query<{
-      basic_salary: string; overtime_rate: string; salary_type: string
+      name: string; basic_salary: string; overtime_rate: string; salary_type: string
     }>(
-      "SELECT basic_salary, overtime_rate, salary_type FROM laborers WHERE id=$1",
+      "SELECT name, basic_salary, overtime_rate, salary_type FROM laborers WHERE id=$1",
       [laborer_id]
     )
     if (!laborer[0]) return NextResponse.json({ error: "Laborer not found" }, { status: 404 })
 
-    const { basic_salary, overtime_rate, salary_type } = laborer[0]
+    const { name: laborerName, basic_salary, overtime_rate, salary_type } = laborer[0]
 
     // Count attendance
     const attRows = await query<{
@@ -106,6 +107,17 @@ export async function POST(req: NextRequest) {
        other_deductions, netSalary, present, absent, halfDays,
        totalOT, payment_method, notes]
     )
+
+    // A freshly calculated salary is Pending — remind that it's due to be paid.
+    if (salary.status !== "Paid") {
+      await notify({
+        type: "salary_due",
+        title: `Salary pending: ${laborerName}`,
+        message: `Net ₹${netSalary.toLocaleString("en-IN")} for ${month}/${year}`,
+        reference_id: salary.id as number,
+        reference_type: "salaries",
+      })
+    }
 
     return NextResponse.json({ salary }, { status: 201 })
   } catch (e) {

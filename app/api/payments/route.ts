@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query } from "@/lib/db"
+import { notify } from "@/lib/notifications"
 
 export async function GET(req: NextRequest) {
   const booking_id = req.nextUrl.searchParams.get("booking_id")
@@ -36,12 +37,13 @@ export async function POST(req: NextRequest) {
     )
 
     // Update booking advance_paid and remaining_balance
-    await query(
+    const [booking] = await query<{ booking_number: string; event_name: string; remaining_balance: string }>(
       `UPDATE bookings SET
        advance_paid = advance_paid + $1,
        remaining_balance = remaining_balance - $1,
        updated_at = NOW()
-       WHERE id = $2`,
+       WHERE id = $2
+       RETURNING booking_number, event_name, remaining_balance`,
       [amount, booking_id]
     )
 
@@ -49,6 +51,17 @@ export async function POST(req: NextRequest) {
       "INSERT INTO activity_logs (action_type, description, reference_id, reference_type) VALUES ('payment_added',$1,$2,'payments')",
       [`Payment ₹${amount} added for booking ${booking_id}`, payment.id]
     )
+
+    const balance = parseFloat(booking?.remaining_balance ?? "0")
+    await notify({
+      type: "payment_received",
+      title: `Payment received: ₹${parseFloat(amount).toLocaleString("en-IN")}`,
+      message: balance > 0
+        ? `${booking?.event_name ?? booking_id} · ${payment_method} · Balance: ₹${balance.toLocaleString("en-IN")}`
+        : `${booking?.event_name ?? booking_id} · ${payment_method} · Fully paid`,
+      reference_id: booking_id,
+      reference_type: "bookings",
+    })
 
     return NextResponse.json({ payment }, { status: 201 })
   } catch (e) {

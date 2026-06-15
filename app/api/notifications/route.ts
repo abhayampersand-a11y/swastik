@@ -18,11 +18,12 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   try {
+    // Reading a notification removes it from the database entirely.
     const { id } = await req.json()
     if (id === "all") {
-      await query("UPDATE notifications SET is_read=TRUE WHERE is_read=FALSE")
+      await query("DELETE FROM notifications")
     } else {
-      await query("UPDATE notifications SET is_read=TRUE WHERE id=$1", [id])
+      await query("DELETE FROM notifications WHERE id=$1", [id])
     }
     return NextResponse.json({ success: true })
   } catch (e) {

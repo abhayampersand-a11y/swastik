@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { BellIcon, CheckCheckIcon, AlertTriangleIcon, CalendarIcon, CreditCardIcon, BanknoteIcon } from "lucide-react"
+import { BellIcon, CheckCheckIcon, AlertTriangleIcon, CalendarIcon, CreditCardIcon, BanknoteIcon, CalendarPlusIcon, CheckCircleIcon } from "lucide-react"
 
 interface Notification {
   id: number
@@ -22,6 +22,8 @@ const typeConfig: Record<string, { icon: React.ElementType; color: string }> = {
   upcoming_event: { icon: CalendarIcon, color: "text-blue-500" },
   pending_payment: { icon: CreditCardIcon, color: "text-red-500" },
   salary_due: { icon: BanknoteIcon, color: "text-orange-500" },
+  new_booking: { icon: CalendarPlusIcon, color: "text-green-600" },
+  payment_received: { icon: CheckCircleIcon, color: "text-green-600" },
 }
 
 export default function NotificationsPage() {

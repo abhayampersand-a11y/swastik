@@ -1,52 +1,52 @@
 import { NextRequest, NextResponse } from "next/server"
-import { queryOne } from "@/lib/db"
+import { getAvailability } from "@/lib/availability"
 
+/**
+ * Date-wise availability check for one item.
+ *
+ * Body accepts either:
+ *  - { item_id, quantity, event_date }                  single-day
+ *  - { item_id, quantity, setup_date, return_date }     multi-day range
+ *  - { item_id, quantity, from, to }                    explicit range
+ * Optional `booking_id` excludes that booking (for edits).
+ *
+ * Response keeps the old keys (available, free_quantity, total_quantity,
+ * reserved_on_date, reason) and adds a per-day `days` breakdown plus the
+ * `worst_day` (the tightest day in the range).
+ */
 export async function POST(req: NextRequest) {
   try {
-    const { item_id, quantity, event_date, booking_id } = await req.json()
+    const body = await req.json()
+    const { item_id, quantity, event_date, setup_date, return_date, from, to, booking_id } = body
 
-    const row = await queryOne<{ total_quantity: number; name: string; total_reserved: string }>(
-      `SELECT
-         i.total_quantity,
-         i.name,
-         COALESCE((
-           SELECT SUM(bi.quantity)
-           FROM booking_items bi
-           JOIN bookings b ON bi.booking_id = b.id
-           WHERE bi.item_id = i.id
-             AND b.event_date = $2
-             AND b.status IN ('Confirmed','Running')
-             AND ($3::int IS NULL OR b.id != $3)
-         ), 0) AS total_reserved
-       FROM inventory_items i
-       WHERE i.id = $1`,
-      [item_id, event_date, booking_id ?? null]
-    )
+    const start = from ?? setup_date ?? event_date
+    const end = to ?? return_date ?? event_date ?? start
 
-    if (!row) {
+    if (!item_id || !start) {
+      return NextResponse.json({ available: false, reason: "item_id and a date are required" }, { status: 400 })
+    }
+
+    const result = await getAvailability({
+      itemId: Number(item_id),
+      from: start,
+      to: end,
+      requestedQuantity: Number(quantity) || 0,
+      excludeBookingId: booking_id ?? null,
+    })
+
+    if (!result) {
       return NextResponse.json({ available: false, reason: "Item not found" })
     }
 
-    const totalQty = row.total_quantity
-    const totalReserved = parseInt(row.total_reserved)
-    const freeQty = totalQty - totalReserved
-
-    if (freeQty >= quantity) {
-      return NextResponse.json({
-        available: true,
-        free_quantity: freeQty,
-        total_quantity: totalQty,
-        reserved_on_date: totalReserved,
-      })
-    } else {
-      return NextResponse.json({
-        available: false,
-        free_quantity: freeQty,
-        total_quantity: totalQty,
-        reserved_on_date: totalReserved,
-        reason: `Only ${freeQty} ${row.name} available on this date (${totalReserved} already reserved)`,
-      })
-    }
+    return NextResponse.json({
+      available: result.available,
+      free_quantity: result.worst_day?.free ?? 0,
+      total_quantity: result.total_quantity,
+      reserved_on_date: result.worst_day?.committed ?? 0,
+      worst_day: result.worst_day,
+      days: result.days,
+      reason: result.reason,
+    })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: "Failed to check availability" }, { status: 500 })

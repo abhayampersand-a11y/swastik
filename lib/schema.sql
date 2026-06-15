@@ -87,12 +87,33 @@ CREATE TABLE IF NOT EXISTS booking_items (
   booking_id INTEGER REFERENCES bookings(id) ON DELETE CASCADE,
   item_id INTEGER REFERENCES inventory_items(id),
   quantity INTEGER NOT NULL,
+  days INTEGER DEFAULT 1,
   rental_rate NUMERIC(10,2) NOT NULL,
   discount NUMERIC(10,2) DEFAULT 0,
   amount NUMERIC(10,2) NOT NULL,
   returned_quantity INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Per-day breakdown for a booking line item (variable qty per day).
+-- When a line item has rows here they OVERRIDE the flat quantity/days
+-- for both rent and date-wise availability. See migration 001.
+CREATE TABLE IF NOT EXISTS booking_item_days (
+  id              SERIAL PRIMARY KEY,
+  booking_item_id INTEGER NOT NULL REFERENCES booking_items(id) ON DELETE CASCADE,
+  item_id         INTEGER NOT NULL REFERENCES inventory_items(id),
+  usage_date      DATE NOT NULL,
+  quantity        INTEGER NOT NULL,
+  rental_rate     NUMERIC(10,2) NOT NULL DEFAULT 0,
+  amount          NUMERIC(10,2) NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (booking_item_id, usage_date)
+);
+CREATE INDEX IF NOT EXISTS idx_booking_item_days_item_date
+  ON booking_item_days (item_id, usage_date);
+CREATE INDEX IF NOT EXISTS idx_booking_items_item ON booking_items (item_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_dates
+  ON bookings (event_date, setup_date, return_date);
 
 -- ============================================================
 -- QUOTATIONS
@@ -296,6 +317,21 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   reference_type VARCHAR(50),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ============================================================
+-- BUSINESS SETTINGS (single row, id=1)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS business_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  business_name VARCHAR(200) DEFAULT 'Swastik Mandap',
+  tagline VARCHAR(200) DEFAULT 'Event & Decoration Services',
+  email VARCHAR(200) DEFAULT 'admin@swastikmandap.com',
+  contact_number VARCHAR(50),
+  address TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT business_settings_single_row CHECK (id = 1)
+);
+INSERT INTO business_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
 -- NOTE: Categories are managed from the app UI at /categories

@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { PlusIcon, Trash2Icon, AlertCircleIcon, CheckCircleIcon } from "lucide-react"
+import { PlusIcon, Trash2Icon, AlertCircleIcon, CheckCircleIcon, SearchIcon, XIcon } from "lucide-react"
 import { NoticeDialog } from "@/components/ui/modal"
 import { FieldError } from "@/components/ui/field-error"
 import { useCachedApi, useInvalidate } from "@/lib/redux/hooks"
@@ -66,6 +66,8 @@ export default function NewBookingPage() {
   const [items, setItems] = useState<BookingItem[]>([])
   const [warning, setWarning] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [customerSearch, setCustomerSearch] = useState("")
+  const [customerOpen, setCustomerOpen] = useState(false)
 
   // Default rental days from setup → return dates, else 1
   const defaultDays = () => {
@@ -186,14 +188,63 @@ export default function NewBookingPage() {
             <CardContent className="space-y-3">
               <div>
                 <Label>Customer *</Label>
-                <Select value={form.customer_id} onValueChange={(v) => { setForm({ ...form, customer_id: v }); setErrors((p) => ({ ...p, customer_id: "" })) }}>
-                  <SelectTrigger aria-invalid={!!errors.customer_id}><SelectValue placeholder="Select customer" /></SelectTrigger>
-                  <SelectContent>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name} · {c.mobile}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {(() => {
+                  const selected = customers.find((c) => String(c.id) === form.customer_id)
+                  const filtered = customerSearch.length > 0
+                    ? customers.filter((c) =>
+                        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                        c.mobile.includes(customerSearch)
+                      )
+                    : customers.slice(0, 8)
+                  return selected ? (
+                    <div className={`flex items-center gap-2 rounded-md border px-3 py-2 ${errors.customer_id ? "border-destructive" : ""}`}>
+                      <span className="text-sm flex-1">{selected.name} · {selected.mobile}</span>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={() => { setForm({ ...form, customer_id: "" }); setCustomerSearch("") }}
+                      >
+                        <XIcon className="size-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="Search customer by name or mobile..."
+                        value={customerSearch}
+                        aria-invalid={!!errors.customer_id}
+                        className="pl-9"
+                        onChange={(e) => { setCustomerSearch(e.target.value); setCustomerOpen(true) }}
+                        onFocus={() => setCustomerOpen(true)}
+                        onBlur={() => setTimeout(() => setCustomerOpen(false), 150)}
+                      />
+                      {customerOpen && (
+                        <div className="absolute z-20 w-full mt-1 rounded-md border bg-background shadow-lg max-h-52 overflow-auto">
+                          {filtered.length === 0 ? (
+                            <div className="p-3 text-sm text-muted-foreground">No customers found</div>
+                          ) : filtered.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setForm({ ...form, customer_id: String(c.id) })
+                                setErrors((p) => ({ ...p, customer_id: "" }))
+                                setCustomerSearch("")
+                                setCustomerOpen(false)
+                              }}
+                            >
+                              <span className="font-medium">{c.name}</span>
+                              <span className="text-muted-foreground text-xs">{c.mobile}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
                 <FieldError msg={errors.customer_id} />
               </div>
               <div>

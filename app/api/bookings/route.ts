@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, withTransaction } from "@/lib/db"
+import { notify } from "@/lib/notifications"
 
 export async function GET(req: NextRequest) {
   const search = req.nextUrl.searchParams.get("search") ?? ""
@@ -86,6 +87,30 @@ export async function POST(req: NextRequest) {
         "INSERT INTO activity_logs (action_type, description, reference_id, reference_type) VALUES ('booking_created',$1,$2,'bookings')",
         [`Booking created: ${booking_number}`, booking.id]
       )
+
+      await notify({
+        type: "new_booking",
+        title: `New booking: ${event_name}`,
+        message: `${booking_number} · ${event_type}`,
+        reference_id: booking.id,
+        reference_type: "bookings",
+      }, client)
+
+      // Flag events happening within the next 7 days right away.
+      if (event_date) {
+        const daysUntil = Math.ceil(
+          (new Date(event_date).getTime() - Date.now()) / 86400_000
+        )
+        if (daysUntil >= 0 && daysUntil <= 7) {
+          await notify({
+            type: "upcoming_event",
+            title: `Upcoming: ${event_name}`,
+            message: `${new Date(event_date).toLocaleDateString("en-IN")} · ${booking_number}`,
+            reference_id: booking.id,
+            reference_type: "bookings",
+          }, client)
+        }
+      }
 
       return booking
     })

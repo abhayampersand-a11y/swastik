@@ -7,6 +7,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { BellIcon } from "lucide-react"
 import Link from "next/link"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { useCachedApi } from "@/lib/redux/hooks"
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -23,11 +24,14 @@ const pageTitles: Record<string, string> = {
   "/expenses": "Expenses",
   "/reports": "Reports",
   "/notifications": "Notifications",
+  "/settings": "Settings",
 }
 
 export function SiteHeader() {
   const pathname = usePathname()
-  const title = pageTitles[pathname] ?? "Swastik Mandap"
+  const { data } = useCachedApi<{ settings: { business_name: string } }>("/api/settings")
+  const businessName = data?.settings?.business_name || "Swastik Mandap"
+  const title = pageTitles[pathname] ?? businessName
 
   return (
     <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">

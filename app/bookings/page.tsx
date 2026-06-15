@@ -40,14 +40,18 @@ const statusColor: Record<string, string> = {
   Cancelled: "destructive",
 }
 
+const PAGE_SIZE = 10
+
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState("All")
+  const [page, setPage] = useState(1)
 
   const fetchBookings = useCallback(async () => {
     setLoading(true)
+    setPage(1)
     const params = new URLSearchParams()
     if (search) params.set("search", search)
     if (status !== "All") params.set("status", status)
@@ -61,6 +65,9 @@ export default function BookingsPage() {
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n)
+
+  const totalPages = Math.ceil(bookings.length / PAGE_SIZE)
+  const paged = bookings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <MainLayout>
@@ -113,7 +120,7 @@ export default function BookingsPage() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {bookings.map((b) => (
+            {paged.map((b) => (
               <Link
                 key={b.id}
                 href={`/bookings/${b.id}`}
@@ -155,6 +162,23 @@ export default function BookingsPage() {
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, bookings.length)} of {bookings.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => p - 1)} disabled={page === 1}>
+                Previous
+              </Button>
+              <span className="px-2">Page {page} of {totalPages}</span>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)} disabled={page === totalPages}>
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </div>

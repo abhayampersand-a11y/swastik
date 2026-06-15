@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { CalendarIcon, PhoneIcon, MapPinIcon, PlusIcon, FileTextIcon, ReceiptIcon } from "lucide-react"
+import { CalendarIcon, PhoneIcon, MapPinIcon, PlusIcon, FileTextIcon, ReceiptIcon, PencilIcon } from "lucide-react"
 import { Modal } from "@/components/ui/modal"
 import { FieldError } from "@/components/ui/field-error"
 import { useInvalidate } from "@/lib/redux/hooks"
@@ -31,6 +31,10 @@ export default function BookingDetailPage() {
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [payForm, setPayForm] = useState({ amount: "", method: "Cash", notes: "", date: new Date().toISOString().split("T")[0] })
   const [payError, setPayError] = useState("")
+  const [editPayOpen, setEditPayOpen] = useState(false)
+  const [editPayId, setEditPayId] = useState<number | null>(null)
+  const [editPayForm, setEditPayForm] = useState({ amount: "", method: "Cash", notes: "", date: "" })
+  const [editPayError, setEditPayError] = useState("")
   const invalidateCache = useInvalidate()
   const [updatingStatus, setUpdatingStatus] = useState(false)
 
@@ -78,6 +82,40 @@ export default function BookingDetailPage() {
     })
     setPaymentOpen(false)
     setPayForm({ amount: "", method: "Cash", notes: "", date: new Date().toISOString().split("T")[0] })
+    invalidateCache("/api/bookings")
+    invalidateCache("/api/dashboard")
+    invalidateCache("/api/payments")
+    fetchData()
+  }
+
+  const openEditPay = (p: Record<string, unknown>) => {
+    setEditPayId(p.id as number)
+    setEditPayForm({
+      amount: String(p.amount),
+      method: String(p.payment_method),
+      notes: String(p.notes ?? ""),
+      date: (p.payment_date as string).split("T")[0],
+    })
+    setEditPayError("")
+    setEditPayOpen(true)
+  }
+
+  const handleEditPayment = async () => {
+    if (!editPayForm.amount || parseFloat(editPayForm.amount) <= 0) {
+      setEditPayError("Please enter a valid amount")
+      return
+    }
+    await fetch(`/api/payments/${editPayId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        payment_date: editPayForm.date,
+        payment_method: editPayForm.method,
+        amount: parseFloat(editPayForm.amount),
+        notes: editPayForm.notes,
+      }),
+    })
+    setEditPayOpen(false)
     invalidateCache("/api/bookings")
     invalidateCache("/api/dashboard")
     invalidateCache("/api/payments")
@@ -234,7 +272,12 @@ export default function BookingDetailPage() {
                         {new Date(p.payment_date as string).toLocaleDateString("en-IN")} · {p.payment_method as string}
                       </div>
                     </div>
-                    {Boolean(p.notes) && <div className="text-xs text-muted-foreground">{String(p.notes)}</div>}
+                    <div className="flex items-center gap-2">
+                      {Boolean(p.notes) && <div className="text-xs text-muted-foreground">{String(p.notes)}</div>}
+                      <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditPay(p)}>
+                        <PencilIcon className="size-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -242,6 +285,46 @@ export default function BookingDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit Payment Dialog */}
+      <Modal open={editPayOpen} onClose={() => setEditPayOpen(false)} className="space-y-4">
+            <h2 className="text-lg font-semibold">Edit Payment</h2>
+            <div className="space-y-3">
+              <div>
+                <Label>Amount (₹) *</Label>
+                <Input
+                  type="number"
+                  value={editPayForm.amount}
+                  aria-invalid={!!editPayError}
+                  onChange={(e) => { setEditPayForm({ ...editPayForm, amount: e.target.value }); setEditPayError("") }}
+                />
+                <FieldError msg={editPayError} />
+              </div>
+              <div>
+                <Label>Payment Method</Label>
+                <Select value={editPayForm.method} onValueChange={(v) => setEditPayForm({ ...editPayForm, method: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["Cash", "UPI", "Bank Transfer", "Cheque"].map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Date</Label>
+                <Input type="date" value={editPayForm.date} onChange={(e) => setEditPayForm({ ...editPayForm, date: e.target.value })} />
+              </div>
+              <div>
+                <Label>Notes</Label>
+                <Input value={editPayForm.notes} onChange={(e) => setEditPayForm({ ...editPayForm, notes: e.target.value })} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditPayOpen(false)}>Cancel</Button>
+              <Button onClick={handleEditPayment}>Save Changes</Button>
+            </div>
+      </Modal>
 
       {/* Payment Dialog */}
       <Modal open={paymentOpen} onClose={() => setPaymentOpen(false)} className="space-y-4">

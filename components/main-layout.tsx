@@ -5,6 +5,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 export function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider
+      className="h-svh overflow-hidden"
       style={
         {
           "--sidebar-width": "calc(var(--spacing) * 72)",
@@ -13,9 +14,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       }
     >
       <AppSidebar variant="inset" />
-      <SidebarInset>
+      <SidebarInset className="min-h-0 overflow-hidden">
         <SiteHeader />
-        <div className="flex flex-1 flex-col">
+        <div className="flex flex-1 flex-col overflow-y-auto min-h-0">
           <div className="@container/main flex flex-1 flex-col gap-2">
             {children}
           </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, queryOne } from "@/lib/db"
+import { notify } from "@/lib/notifications"
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -42,6 +43,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
        damaged_quantity ?? 0, purchase_price, rental_price, description,
        features, low_stock_threshold ?? 10, id]
     )
+
+    // Warn if this edit leaves the item at/below its low-stock threshold.
+    const threshold = item.low_stock_threshold as number
+    const available = item.available_quantity as number
+    if (threshold > 0 && available <= threshold) {
+      await notify({
+        type: "low_stock",
+        title: `Low stock: ${item.name}`,
+        message: `Only ${available} left (threshold: ${threshold})`,
+        reference_id: item.id as number,
+        reference_type: "inventory_items",
+      })
+    }
+
     return NextResponse.json({ item })
   } catch (e) {
     console.error(e)

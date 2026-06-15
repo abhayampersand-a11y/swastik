@@ -39,14 +39,25 @@ export default function AttendancePage() {
   const [savedNotice, setSavedNotice] = useState(false)
 
   useEffect(() => {
-    if (!selectedDate) return
+    if (!selectedDate || laborers.length === 0) return
     setLoading(true)
-    fetch(`/api/attendance?laborer_id=all`)
-      .then(() => {
-        // Initialize attendance with Present for all laborers
+    fetch(`/api/attendance?date=${selectedDate}`)
+      .then((r) => r.json())
+      .then((d) => {
+        // Map saved records for this date by laborer_id
+        const saved: Record<number, AttendanceRecord> = {}
+        for (const a of (d.attendance ?? []) as Array<{ laborer_id: number; laborer_name: string; status: string; overtime_hours: number }>) {
+          saved[a.laborer_id] = {
+            laborer_id: a.laborer_id,
+            laborer_name: a.laborer_name,
+            status: a.status,
+            overtime_hours: Number(a.overtime_hours) || 0,
+          }
+        }
+        // Use saved record where present, otherwise default to Present
         const init: Record<number, AttendanceRecord> = {}
         laborers.forEach((l) => {
-          init[l.id] = { laborer_id: l.id, laborer_name: l.name, status: "Present", overtime_hours: 0 }
+          init[l.id] = saved[l.id] ?? { laborer_id: l.id, laborer_name: l.name, status: "Present", overtime_hours: 0 }
         })
         setAttendance(init)
         setLoading(false)

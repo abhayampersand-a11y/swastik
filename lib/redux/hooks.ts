@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useDispatch, useSelector, TypedUseSelectorHook } from "react-redux"
 import type { RootState, AppDispatch } from "./store"
 import { refreshUrl, invalidate } from "./api-cache-slice"
@@ -21,6 +21,11 @@ export function useCachedApi<T>(url: string | null) {
   const entry = useAppSelector((s) =>
     url ? s.apiCache.entries[url] : undefined
   )
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (url) dispatch(refreshUrl(url))
@@ -31,9 +36,9 @@ export function useCachedApi<T>(url: string | null) {
   }, [url, dispatch])
 
   return {
-    data: entry?.data as T | undefined,
-    // Loading only when there is nothing cached yet (first ever visit)
-    loading: !entry,
+    data: mounted ? (entry?.data as T | undefined) : undefined,
+    // Loading until mounted (avoids SSR/client hydration mismatch from redux-persist)
+    loading: !mounted || !entry,
     refresh,
   }
 }

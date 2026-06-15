@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, queryOne, withTransaction } from "@/lib/db"
+import { notify } from "@/lib/notifications"
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -52,8 +53,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           [id]
         )
         for (const bi of bookingItems) {
-          const { rows: [avail] } = await client.query<{ available_quantity: number }>(
-            "SELECT available_quantity FROM inventory_items WHERE id=$1 FOR UPDATE",
+          const { rows: [avail] } = await client.query<{ name: string; available_quantity: number; low_stock_threshold: number }>(
+            "SELECT name, available_quantity, low_stock_threshold FROM inventory_items WHERE id=$1 FOR UPDATE",
             [bi.item_id]
           )
           if (!avail || avail.available_quantity < bi.quantity) {
@@ -71,6 +72,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
              VALUES ($1,'reserve',$2,$3,'bookings','Reserved for booking')`,
             [bi.item_id, bi.quantity, id]
           )
+
+          // Notify if reserving this booking pushed the item to/below its low-stock threshold.
+          const remainingStock = avail.available_quantity - bi.quantity
+          if (avail.low_stock_threshold > 0 && remainingStock <= avail.low_stock_threshold) {
+            await notify({
+              type: "low_stock",
+              title: `Low stock: ${avail.name}`,
+              message: `Only ${remainingStock} left (threshold: ${avail.low_stock_threshold})`,
+              reference_id: bi.item_id,
+              reference_type: "inventory_items",
+            }, client)
+          }
         }
       }
 
@@ -112,6 +125,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         "INSERT INTO activity_logs (action_type, description, reference_id, reference_type) VALUES ('booking_updated',$1,$2,'bookings')",
         [`Booking ${booking.booking_number} status → ${status}`, id]
       )
+
+      // On confirm, flag any outstanding balance as a pending-payment reminder.
+      if (status === "Confirmed" && existing.status !== "Confirmed" && parseFloat(booking.remaining_balance) > 0) {
+        await notify({
+          type: "pending_payment",
+          title: `Payment due: ${booking.event_name}`,
+          message: `Balance: ₹${parseFloat(booking.remaining_balance).toLocaleString("en-IN")} · ${booking.booking_number}`,
+          reference_id: id,
+          reference_type: "bookings",
+        }, client)
+      }
 
       return booking
     })

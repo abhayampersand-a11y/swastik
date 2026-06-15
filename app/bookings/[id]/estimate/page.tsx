@@ -5,12 +5,23 @@ import { useParams } from "next/navigation"
 import { fmtINR, amountInWords } from "@/lib/format"
 import { PrinterIcon, ArrowLeftIcon } from "lucide-react"
 import Link from "next/link"
+import { useCachedApi } from "@/lib/redux/hooks"
 
 type Row = Record<string, string | number | null>
+
+interface BusinessSettings {
+  business_name: string
+  tagline: string
+  email: string
+  contact_number: string
+  address: string
+}
 
 export default function EstimatePrintPage() {
   const { id } = useParams()
   const [data, setData] = useState<{ booking: Row; items: Row[] } | null>(null)
+  const { data: settingsData } = useCachedApi<{ settings: BusinessSettings }>("/api/settings")
+  const biz = settingsData?.settings
 
   useEffect(() => {
     fetch(`/api/bookings/${id}`)
@@ -48,9 +59,16 @@ export default function EstimatePrintPage() {
         {/* Header */}
         <div className="flex items-start justify-between border-b-4 border-amber-500 pb-5">
           <div>
-            <h1 className="font-heading text-3xl font-bold tracking-wide text-gray-900">Swastik Mandap</h1>
-            <p className="mt-1 text-sm text-gray-500">Event &amp; Decoration Services</p>
-            <p className="text-sm text-gray-500">admin@swastikmandap.com</p>
+            <h1 className="font-heading text-3xl font-bold tracking-wide text-gray-900">{biz?.business_name || "Swastik Mandap"}</h1>
+            {(biz?.tagline ?? "Event & Decoration Services") && (
+              <p className="mt-1 text-sm text-gray-500">{biz?.tagline ?? "Event & Decoration Services"}</p>
+            )}
+            {biz?.address && <p className="text-sm text-gray-500">{biz.address}</p>}
+            {(biz?.contact_number || biz?.email || !biz) && (
+              <p className="text-sm text-gray-500">
+                {[biz?.contact_number, biz?.email ?? (biz ? "" : "admin@swastikmandap.com")].filter(Boolean).join(" · ")}
+              </p>
+            )}
           </div>
           <div className="text-right">
             <div className="inline-block rounded-md border-2 border-amber-500 px-4 py-1.5 text-xl font-bold tracking-widest text-amber-600">
@@ -151,7 +169,7 @@ export default function EstimatePrintPage() {
             <div className="mb-1 w-44 border-t border-gray-300 pt-1">Customer Signature</div>
           </div>
           <div className="text-center">
-            <div className="mb-1 w-44 border-t border-gray-300 pt-1">For Swastik Mandap</div>
+            <div className="mb-1 w-44 border-t border-gray-300 pt-1">For {biz?.business_name || "Swastik Mandap"}</div>
           </div>
         </div>
       </div>

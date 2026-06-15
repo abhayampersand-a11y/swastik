@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import { useCachedApi } from "@/lib/redux/hooks"
 import {
   Sidebar,
   SidebarContent,
@@ -117,7 +118,7 @@ const secondaryItems = [
   },
   {
     title: "Settings",
-    url: "#",
+    url: "/settings",
     icon: Settings2Icon,
   },
 ]
@@ -156,6 +157,9 @@ function NavGroup({
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
+  const { data } = useCachedApi<{ settings: { business_name: string; email: string } }>("/api/settings")
+  const businessName = data?.settings?.business_name || "Swastik Mandap"
+  const businessEmail = data?.settings?.email || "admin@swastikmandap.com"
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -168,7 +172,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             >
               <Link href="/dashboard">
                 <BuildingIcon className="size-5!" />
-                <span className="text-base font-semibold">Swastik Mandap</span>
+                <span className="text-base font-semibold">{businessName}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -185,8 +189,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         <NavUser
           user={{
-            name: "Swastik Mandap",
-            email: "admin@swastikmandap.com",
+            name: businessName,
+            email: businessEmail,
             avatar: "",
           }}
         />

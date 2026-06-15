@@ -128,16 +128,20 @@ function CustomerDialog({
   )
 }
 
+const PAGE_SIZE = 10
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [deleting, setDeleting] = useState<Customer | null>(null)
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
+    setPage(1)
     const params = new URLSearchParams()
     if (search) params.set("search", search)
     const res = await fetch(`/api/customers?${params}`)
@@ -157,6 +161,9 @@ export default function CustomersPage() {
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n)
+
+  const totalPages = Math.ceil(customers.length / PAGE_SIZE)
+  const paged = customers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <MainLayout>
@@ -195,7 +202,7 @@ export default function CustomersPage() {
           </Card>
         ) : (
           <div className="grid gap-3">
-            {customers.map((c) => (
+            {paged.map((c) => (
               <div
                 key={c.id}
                 className="flex items-center gap-3 rounded-lg border p-4 hover:bg-muted/30 transition-colors"
@@ -232,6 +239,23 @@ export default function CustomersPage() {
           </div>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground px-4 lg:px-6 pb-4">
+          <span>
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, customers.length)} of {customers.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPage((p) => p - 1)} disabled={page === 1}>
+              Previous
+            </Button>
+            <span className="px-2">Page {page} of {totalPages}</span>
+            <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)} disabled={page === totalPages}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       <CustomerDialog
         open={dialogOpen}

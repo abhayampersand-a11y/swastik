@@ -4,6 +4,7 @@ import { query } from "@/lib/db"
 export async function GET(req: NextRequest) {
   const month = req.nextUrl.searchParams.get("month")
   const year = req.nextUrl.searchParams.get("year")
+  const date = req.nextUrl.searchParams.get("date")
   const laborer_id = req.nextUrl.searchParams.get("laborer_id")
 
   try {
@@ -13,7 +14,10 @@ export async function GET(req: NextRequest) {
       WHERE 1=1
     `
     const params: unknown[] = []
-    if (month && year) {
+    if (date) {
+      params.push(date)
+      sql += ` AND a.attendance_date=$${params.length}`
+    } else if (month && year) {
       params.push(month, year)
       sql += ` AND EXTRACT(MONTH FROM a.attendance_date)=$${params.length - 1}
                AND EXTRACT(YEAR FROM a.attendance_date)=$${params.length}`
