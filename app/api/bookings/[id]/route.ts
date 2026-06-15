@@ -12,11 +12,19 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     )
     if (!booking) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-    const [items, payments] = await Promise.all([
+    const [items, perDays, payments] = await Promise.all([
       query(
         `SELECT bi.*, i.name as item_name, i.unit_type
          FROM booking_items bi JOIN inventory_items i ON bi.item_id = i.id
-         WHERE bi.booking_id=$1`,
+         WHERE bi.booking_id=$1 ORDER BY bi.id`,
+        [id]
+      ),
+      query<{ booking_item_id: number; usage_date: string; quantity: number; rental_rate: string; amount: string }>(
+        `SELECT bid.booking_item_id, to_char(bid.usage_date,'YYYY-MM-DD') AS usage_date,
+                bid.quantity, bid.rental_rate, bid.amount
+         FROM booking_item_days bid
+         JOIN booking_items bi ON bi.id = bid.booking_item_id
+         WHERE bi.booking_id=$1 ORDER BY bid.usage_date`,
         [id]
       ),
       query(
@@ -24,7 +32,14 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
         [id]
       ),
     ])
-    return NextResponse.json({ booking, items, payments })
+
+    // Attach the per-day breakdown to each line item (empty array when flat).
+    const itemsWithDays = items.map((it) => ({
+      ...it,
+      per_day: perDays.filter((d) => d.booking_item_id === (it as { id: number }).id),
+    }))
+
+    return NextResponse.json({ booking, items: itemsWithDays, payments })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: "Failed" }, { status: 500 })

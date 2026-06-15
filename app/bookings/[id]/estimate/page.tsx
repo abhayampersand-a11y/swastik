@@ -110,18 +110,26 @@ export default function EstimatePrintPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.map((it, i) => (
-              <tr key={i}>
-                <td className="px-3 py-2.5 text-gray-500">{i + 1}</td>
-                <td className="px-3 py-2.5 font-medium text-gray-900">
-                  {it.item_name} <span className="text-xs text-gray-400">({it.unit_type})</span>
-                </td>
-                <td className="px-3 py-2.5 text-right">{it.quantity}</td>
-                <td className="px-3 py-2.5 text-right">{it.days ?? 1}</td>
-                <td className="px-3 py-2.5 text-right">{fmtINR(Number(it.rental_rate))}</td>
-                <td className="px-3 py-2.5 text-right font-medium">{fmtINR(Number(it.amount))}</td>
-              </tr>
-            ))}
+            {items.map((it, i) => {
+              const perDay = (it.per_day as unknown as { usage_date: string; quantity: number }[]) ?? []
+              return (
+                <tr key={i}>
+                  <td className="px-3 py-2.5 text-gray-500">{i + 1}</td>
+                  <td className="px-3 py-2.5 font-medium text-gray-900">
+                    {it.item_name} <span className="text-xs text-gray-400">({it.unit_type})</span>
+                    {perDay.length > 0 && (
+                      <div className="text-xs font-normal text-gray-400">
+                        {perDay.map((p) => `${p.usage_date.slice(5)}: ${p.quantity}`).join(" · ")}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">{perDay.length > 0 ? `${it.quantity} (peak)` : it.quantity}</td>
+                  <td className="px-3 py-2.5 text-right">{it.days ?? 1}</td>
+                  <td className="px-3 py-2.5 text-right">{fmtINR(Number(it.rental_rate))}</td>
+                  <td className="px-3 py-2.5 text-right font-medium">{fmtINR(Number(it.amount))}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
 

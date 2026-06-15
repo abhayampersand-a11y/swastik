@@ -155,6 +155,11 @@ export default function BookingDetailPage() {
           </div>
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => router.back()}>Back</Button>
+            {booking.status !== "Cancelled" && booking.status !== "Closed" && (
+              <Button variant="outline" onClick={() => router.push(`/bookings/${id}/edit`)}>
+                <PencilIcon className="size-4 mr-1" /> Edit Items
+              </Button>
+            )}
             <Button variant="outline" onClick={() => window.open(`/bookings/${id}/estimate`, "_blank")}>
               <FileTextIcon className="size-4 mr-1" /> Estimate PDF
             </Button>
@@ -241,15 +246,25 @@ export default function BookingDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {items.map((item, i) => (
-                    <tr key={i}>
-                      <td className="py-2">{item.item_name as string} <span className="text-muted-foreground text-xs">({item.unit_type as string})</span></td>
-                      <td className="py-2 text-right">{item.quantity as number}</td>
-                      <td className="py-2 text-right">{(item.days as number) ?? 1}</td>
-                      <td className="py-2 text-right">{fmt(item.rental_rate as number)}</td>
-                      <td className="py-2 text-right font-medium">{fmt(item.amount as number)}</td>
-                    </tr>
-                  ))}
+                  {items.map((item, i) => {
+                    const perDay = (item.per_day as { usage_date: string; quantity: number }[]) ?? []
+                    return (
+                      <tr key={i}>
+                        <td className="py-2">
+                          {item.item_name as string} <span className="text-muted-foreground text-xs">({item.unit_type as string})</span>
+                          {perDay.length > 0 && (
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {perDay.map((p) => `${p.usage_date.slice(5)}: ${p.quantity}`).join("  ·  ")}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2 text-right">{perDay.length > 0 ? `${item.quantity as number} (peak)` : (item.quantity as number)}</td>
+                        <td className="py-2 text-right">{(item.days as number) ?? 1}</td>
+                        <td className="py-2 text-right">{fmt(item.rental_rate as number)}</td>
+                        <td className="py-2 text-right font-medium">{fmt(item.amount as number)}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}
