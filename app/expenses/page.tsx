@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { PlusIcon, Trash2Icon, TrendingDownIcon } from "lucide-react"
+import { PlusIcon, Trash2Icon, TrendingDownIcon, EditIcon, SettingsIcon, XIcon, TagIcon } from "lucide-react"
 import { Modal, ConfirmDialog } from "@/components/ui/modal"
 import { FieldError } from "@/components/ui/field-error"
 
@@ -23,19 +23,50 @@ interface Expense {
   description?: string
 }
 
-const CATEGORIES = ["Diesel", "Transport", "Food", "Maintenance", "Decoration", "Labor", "Miscellaneous"]
+interface ExpenseCategory {
+  id: number
+  name: string
+  expense_count: number
+}
 
-function ExpenseDialog({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
+function ExpenseDialog({
+  open,
+  onClose,
+  onSaved,
+  categories,
+}: {
+  open: boolean
+  onClose: () => void
+  onSaved: () => void
+  categories: ExpenseCategory[]
+}) {
   const [form, setForm] = useState({
     expense_date: new Date().toISOString().split("T")[0],
-    category: "Miscellaneous",
+    category: "",
     amount: "",
     description: "",
   })
   const [saving, setSaving] = useState(false)
   const [amountError, setAmountError] = useState("")
 
+  // Reset the form (and pick a sensible default category) each time it opens.
+  useEffect(() => {
+    if (!open) return
+    const preferred = categories.find((c) => c.name === "Miscellaneous") ?? categories[0]
+    setForm({
+      expense_date: new Date().toISOString().split("T")[0],
+      category: preferred?.name ?? "",
+      amount: "",
+      description: "",
+    })
+    setAmountError("")
+  }, [open, categories])
+
   const handleSave = async () => {
+    if (!form.category) {
+      setAmountError("")
+      return
+    }
     if (!form.amount || parseFloat(form.amount) <= 0) {
       setAmountError("Please enter a valid amount")
       return
@@ -63,9 +94,9 @@ function ExpenseDialog({ open, onClose, onSaved }: { open: boolean; onClose: () 
           <div>
             <Label>Category</Label>
             <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {categories.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -86,9 +117,164 @@ function ExpenseDialog({ open, onClose, onSaved }: { open: boolean; onClose: () 
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Add Expense"}</Button>
+          <Button onClick={handleSave} disabled={saving || !form.category}>{saving ? "Saving..." : "Add Expense"}</Button>
         </div>
     </Modal>
+  )
+}
+
+function ManageCategoriesDialog({
+  open,
+  onClose,
+  categories,
+  onChanged,
+}: {
+  open: boolean
+  onClose: () => void
+  categories: ExpenseCategory[]
+  onChanged: () => void
+}) {
+  const [name, setName] = useState("")
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editName, setEditName] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [deleting, setDeleting] = useState<ExpenseCategory | null>(null)
+
+  useEffect(() => {
+    if (open) { setName(""); setEditingId(null); setEditName(""); setError("") }
+  }, [open])
+
+  const add = async () => {
+    if (!name.trim()) { setError("Category name is required"); return }
+    setBusy(true); setError("")
+    try {
+      const res = await fetch("/api/expenses/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? "Failed to add"); return }
+      setName("")
+      onChanged()
+    } finally { setBusy(false) }
+  }
+
+  const saveEdit = async (id: number) => {
+    if (!editName.trim()) { setError("Category name is required"); return }
+    setBusy(true); setError("")
+    try {
+      const res = await fetch(`/api/expenses/categories/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editName.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? "Failed to save"); return }
+      setEditingId(null)
+      onChanged()
+    } finally { setBusy(false) }
+  }
+
+  const confirmDelete = async () => {
+    if (!deleting) return
+    setBusy(true); setError("")
+    try {
+      const res = await fetch(`/api/expenses/categories/${deleting.id}`, { method: "DELETE" })
+      const data = await res.json()
+      setDeleting(null)
+      if (!res.ok) { setError(data.error ?? "Failed to delete"); return }
+      onChanged()
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <>
+      <Modal open={open} onClose={onClose} className="space-y-4 max-w-md">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <TagIcon className="size-4" /> Manage Categories
+          </h2>
+          <Button variant="ghost" size="icon" onClick={onClose}><XIcon className="size-4" /></Button>
+        </div>
+
+        {/* Add new */}
+        <div className="flex gap-2">
+          <Input
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError("") }}
+            placeholder="New category name"
+            onKeyDown={(e) => e.key === "Enter" && add()}
+          />
+          <Button onClick={add} disabled={busy || !name.trim()}>
+            <PlusIcon className="size-4 mr-1" /> Add
+          </Button>
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {/* List */}
+        <div className="max-h-72 overflow-y-auto rounded-lg border divide-y">
+          {categories.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground text-center">No categories yet</p>
+          ) : (
+            categories.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 p-2.5">
+                {editingId === c.id ? (
+                  <>
+                    <Input
+                      value={editName}
+                      onChange={(e) => { setEditName(e.target.value); setError("") }}
+                      autoFocus
+                      onKeyDown={(e) => e.key === "Enter" && saveEdit(c.id)}
+                      className="h-8"
+                    />
+                    <Button size="sm" onClick={() => saveEdit(c.id)} disabled={busy}>Save</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-sm font-medium">{c.name}</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {c.expense_count} {c.expense_count === 1 ? "use" : "uses"}
+                    </Badge>
+                    <Button
+                      variant="ghost" size="icon" className="size-8"
+                      onClick={() => { setEditingId(c.id); setEditName(c.name); setError("") }}
+                      title="Rename"
+                    >
+                      <EditIcon className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive"
+                      onClick={() => setDeleting(c)}
+                      disabled={c.expense_count > 0}
+                      title={c.expense_count > 0 ? "In use — cannot delete" : "Delete"}
+                    >
+                      <Trash2Icon className="size-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Categories in use can’t be deleted. Renaming updates existing expenses automatically.
+        </p>
+      </Modal>
+
+      <ConfirmDialog
+        open={!!deleting}
+        title="Delete category?"
+        description={deleting ? `Category "${deleting.name}" will be permanently removed.` : ""}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleting(null)}
+      />
+    </>
   )
 }
 
@@ -101,6 +287,8 @@ export default function ExpensesPage() {
   const [year, setYear] = useState(String(now.getFullYear()))
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [categories, setCategories] = useState<ExpenseCategory[]>([])
+  const [manageOpen, setManageOpen] = useState(false)
 
   const MONTHS_LIST = [
     "", "January", "February", "March", "April", "May", "June",
@@ -116,7 +304,14 @@ export default function ExpensesPage() {
     setLoading(false)
   }, [month, year])
 
+  const fetchCategories = useCallback(async () => {
+    const res = await fetch("/api/expenses/categories")
+    const data = await res.json()
+    setCategories(data.categories ?? [])
+  }, [])
+
   useEffect(() => { fetchExpenses() }, [fetchExpenses])
+  useEffect(() => { fetchCategories() }, [fetchCategories])
 
   const handleDelete = async () => {
     if (deletingId === null) return
@@ -154,6 +349,9 @@ export default function ExpensesPage() {
                 {["2024", "2025", "2026"].map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Button variant="outline" onClick={() => setManageOpen(true)}>
+              <TagIcon className="size-4 mr-1" /> Categories
+            </Button>
             <Button onClick={() => setDialogOpen(true)}>
               <PlusIcon className="size-4 mr-1" /> Add
             </Button>
@@ -217,7 +415,13 @@ export default function ExpensesPage() {
           </div>
         )}
       </div>
-      <ExpenseDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSaved={fetchExpenses} />
+      <ExpenseDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSaved={fetchExpenses} categories={categories} />
+      <ManageCategoriesDialog
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        categories={categories}
+        onChanged={() => { fetchCategories(); fetchExpenses() }}
+      />
       <ConfirmDialog
         open={deletingId !== null}
         title="Delete expense?"

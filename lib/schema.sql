@@ -266,6 +266,14 @@ CREATE TABLE IF NOT EXISTS salaries (
 -- ============================================================
 -- EXPENSES
 -- ============================================================
+-- Dynamic, user-managed expense categories. `expenses.category`
+-- holds the name (VARCHAR), so renames cascade by name in the API.
+CREATE TABLE IF NOT EXISTS expense_categories (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS expenses (
   id SERIAL PRIMARY KEY,
   expense_date DATE NOT NULL,
