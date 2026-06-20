@@ -38,14 +38,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { laborer_id, attendance_date, status, overtime_hours, notes } = await req.json()
+    const { laborer_id, attendance_date, status, overtime_hours, work_hours, notes } = await req.json()
     const [record] = await query(
-      `INSERT INTO attendance (laborer_id, attendance_date, status, overtime_hours, notes)
-       VALUES ($1,$2,$3,$4,$5)
+      `INSERT INTO attendance (laborer_id, attendance_date, status, overtime_hours, work_hours, notes)
+       VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT (laborer_id, attendance_date)
-       DO UPDATE SET status=$3, overtime_hours=$4, notes=$5
+       DO UPDATE SET status=$3, overtime_hours=$4, work_hours=$5, notes=$6
        RETURNING *`,
-      [laborer_id, attendance_date, status ?? "Present", overtime_hours ?? 0, notes]
+      [laborer_id, attendance_date, status ?? "Present", overtime_hours ?? 0, work_hours ?? null, notes]
     )
     return NextResponse.json({ record }, { status: 201 })
   } catch (e) {
@@ -57,16 +57,16 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   // Bulk attendance entry for a date
   try {
-    const { records } = await req.json() // [{laborer_id, attendance_date, status, overtime_hours}]
+    const { records } = await req.json() // [{laborer_id, attendance_date, status, overtime_hours, work_hours}]
     const saved = []
     for (const rec of records) {
       const [record] = await query(
-        `INSERT INTO attendance (laborer_id, attendance_date, status, overtime_hours)
-         VALUES ($1,$2,$3,$4)
+        `INSERT INTO attendance (laborer_id, attendance_date, status, overtime_hours, work_hours)
+         VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT (laborer_id, attendance_date)
-         DO UPDATE SET status=$3, overtime_hours=$4
+         DO UPDATE SET status=$3, overtime_hours=$4, work_hours=$5
          RETURNING *`,
-        [rec.laborer_id, rec.attendance_date, rec.status ?? "Present", rec.overtime_hours ?? 0]
+        [rec.laborer_id, rec.attendance_date, rec.status ?? "Present", rec.overtime_hours ?? 0, rec.work_hours ?? null]
       )
       saved.push(record)
     }

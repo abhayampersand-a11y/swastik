@@ -225,9 +225,20 @@ CREATE TABLE IF NOT EXISTS attendance (
   attendance_date DATE NOT NULL,
   status VARCHAR(50) DEFAULT 'Present', -- Present, Absent, Half Day
   overtime_hours NUMERIC(5,2) DEFAULT 0,
+  work_hours NUMERIC(5,2), -- auto-filled from status + work_hour_settings, editable
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(laborer_id, attendance_date)
+);
+
+-- Single-row global config: how many hours count as a full / half day.
+-- Recorded for reference; does not change salary math (day-based).
+CREATE TABLE IF NOT EXISTS work_hour_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  full_day_hours NUMERIC(5,2) NOT NULL DEFAULT 8,
+  half_day_hours NUMERIC(5,2) NOT NULL DEFAULT 4,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT work_hour_settings_single_row CHECK (id = 1)
 );
 
 CREATE TABLE IF NOT EXISTS labor_advances (

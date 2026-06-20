@@ -19,6 +19,15 @@ interface AttendanceRecord {
   laborer_name: string
   status: string
   overtime_hours: number
+  work_hours: number
+}
+interface WorkHourSettings { full_day_hours: number; half_day_hours: number }
+
+// Hours a status implies, given the configured full/half-day lengths.
+function hoursForStatus(status: string, s: WorkHourSettings): number {
+  if (status === "Present") return Number(s.full_day_hours) || 0
+  if (status === "Half Day") return Number(s.half_day_hours) || 0
+  return 0 // Absent
 }
 
 const MONTHS = [
@@ -33,6 +42,11 @@ export default function AttendancePage() {
   const [selectedDate, setSelectedDate] = useState(now.toISOString().split("T")[0])
   const { data: laborersData } = useCachedApi<{ laborers: Laborer[] }>("/api/laborers")
   const laborers = useMemo(() => laborersData?.laborers ?? [], [laborersData])
+  const { data: settingsData } = useCachedApi<{ settings: WorkHourSettings }>("/api/salary/settings")
+  const settings = useMemo<WorkHourSettings>(
+    () => settingsData?.settings ?? { full_day_hours: 8, half_day_hours: 4 },
+    [settingsData]
+  )
   const [attendance, setAttendance] = useState<Record<number, AttendanceRecord>>({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -46,30 +60,41 @@ export default function AttendancePage() {
       .then((d) => {
         // Map saved records for this date by laborer_id
         const saved: Record<number, AttendanceRecord> = {}
-        for (const a of (d.attendance ?? []) as Array<{ laborer_id: number; laborer_name: string; status: string; overtime_hours: number }>) {
+        for (const a of (d.attendance ?? []) as Array<{ laborer_id: number; laborer_name: string; status: string; overtime_hours: number; work_hours: number | null }>) {
           saved[a.laborer_id] = {
             laborer_id: a.laborer_id,
             laborer_name: a.laborer_name,
             status: a.status,
             overtime_hours: Number(a.overtime_hours) || 0,
+            // Legacy rows have no work_hours — derive from the saved status.
+            work_hours: a.work_hours != null ? Number(a.work_hours) : hoursForStatus(a.status, settings),
           }
         }
         // Use saved record where present, otherwise default to Present
         const init: Record<number, AttendanceRecord> = {}
         laborers.forEach((l) => {
-          init[l.id] = saved[l.id] ?? { laborer_id: l.id, laborer_name: l.name, status: "Present", overtime_hours: 0 }
+          init[l.id] = saved[l.id] ?? {
+            laborer_id: l.id,
+            laborer_name: l.name,
+            status: "Present",
+            overtime_hours: 0,
+            work_hours: hoursForStatus("Present", settings),
+          }
         })
         setAttendance(init)
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [selectedDate, laborers])
+  }, [selectedDate, laborers, settings])
 
   const updateStatus = (laborer_id: number, field: string, value: string | number) => {
-    setAttendance((prev) => ({
-      ...prev,
-      [laborer_id]: { ...prev[laborer_id], [field]: value },
-    }))
+    setAttendance((prev) => {
+      const next = { ...prev[laborer_id], [field]: value }
+      // Changing the status auto-fills the worked hours from settings
+      // (still editable afterwards via the hours input).
+      if (field === "status") next.work_hours = hoursForStatus(value as string, settings)
+      return { ...prev, [laborer_id]: next }
+    })
   }
 
   const handleSave = async () => {
@@ -79,6 +104,7 @@ export default function AttendancePage() {
       attendance_date: selectedDate,
       status: a.status,
       overtime_hours: a.overtime_hours,
+      work_hours: a.work_hours,
     }))
     await fetch("/api/attendance", {
       method: "PUT",
@@ -159,6 +185,19 @@ export default function AttendancePage() {
                           <SelectItem value="Half Day">Half Day</SelectItem>
                         </SelectContent>
                       </Select>
+                      {rec?.status !== "Absent" && (
+                        <div className="flex items-center gap-1.5 text-sm">
+                          <span className="text-xs text-muted-foreground">Hrs:</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            value={rec?.work_hours ?? 0}
+                            onChange={(e) => updateStatus(l.id, "work_hours", parseFloat(e.target.value) || 0)}
+                            className="w-16 rounded border px-2 py-1 text-sm bg-background"
+                          />
+                        </div>
+                      )}
                       {rec?.status === "Present" && (
                         <div className="flex items-center gap-1.5 text-sm">
                           <span className="text-xs text-muted-foreground">OT hrs:</span>
