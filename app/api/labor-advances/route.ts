@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
       params.push(laborer_id)
       sql += ` AND la.laborer_id=$${params.length}`
     }
-    sql += " ORDER BY la.advance_date DESC"
+    sql += " ORDER BY la.created_at DESC, la.id DESC"
     const advances = await query(sql, params)
     return NextResponse.json({ advances })
   } catch (e) {

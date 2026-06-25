@@ -208,6 +208,9 @@ export default function BookingDetailPage() {
             <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{fmt(booking.subtotal)}</span></div>
               <div className="flex justify-between text-muted-foreground"><span>Discount</span><span>− {fmt(booking.discount)}</span></div>
+              {Number(booking.transport_charges) > 0 && (
+                <div className="flex justify-between text-muted-foreground"><span>Transport</span><span>+ {fmt(booking.transport_charges)}</span></div>
+              )}
               <div className="flex justify-between text-muted-foreground"><span>GST ({booking.gst_percent}%)</span><span>{fmt(booking.gst_amount)}</span></div>
               <div className="flex justify-between font-semibold border-t pt-2"><span>Total</span><span>{fmt(booking.total_amount)}</span></div>
               <div className="flex justify-between text-green-600"><span>Paid</span><span>{fmt(booking.advance_paid)}</span></div>

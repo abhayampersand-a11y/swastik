@@ -59,6 +59,7 @@ export default function NewBookingPage() {
     return_date: "",
     venue_address: "",
     notes: "",
+    transport_charges: "0",
     discount: "0",
     gst_percent: "0",
   })
@@ -128,8 +129,9 @@ export default function NewBookingPage() {
 
   const subtotal = items.reduce((s, i) => s + i.amount, 0)
   const disc = parseFloat(form.discount) || 0
-  const gst = ((subtotal - disc) * (parseFloat(form.gst_percent) || 0)) / 100
-  const total = subtotal - disc + gst
+  const transport = parseFloat(form.transport_charges) || 0
+  const gst = ((subtotal - disc + transport) * (parseFloat(form.gst_percent) || 0)) / 100
+  const total = subtotal - disc + transport + gst
 
   const handleSubmit = async () => {
     const e: Record<string, string> = {}
@@ -303,6 +305,10 @@ export default function NewBookingPage() {
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <Label>Transport / Delivery (₹)</Label>
+                  <Input type="number" value={form.transport_charges} onChange={(e) => setForm({ ...form, transport_charges: e.target.value })} />
+                </div>
+                <div>
                   <Label>Discount (₹)</Label>
                   <Input type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} />
                 </div>
@@ -314,6 +320,9 @@ export default function NewBookingPage() {
               <div className="rounded-lg bg-muted/50 p-3 space-y-1.5 text-sm">
                 <div className="flex justify-between"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
                 <div className="flex justify-between text-muted-foreground"><span>Discount</span><span>− {fmt(disc)}</span></div>
+                {transport > 0 && (
+                  <div className="flex justify-between text-muted-foreground"><span>Transport</span><span>+ {fmt(transport)}</span></div>
+                )}
                 <div className="flex justify-between text-muted-foreground"><span>GST ({form.gst_percent}%)</span><span>{fmt(gst)}</span></div>
                 <div className="flex justify-between font-semibold text-base border-t pt-1.5"><span>Total</span><span>{fmt(total)}</span></div>
               </div>

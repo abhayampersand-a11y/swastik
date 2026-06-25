@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       params.push(booking_id)
       sql += ` AND inv.booking_id = $${params.length}`
     }
-    sql += " ORDER BY inv.invoice_date DESC LIMIT 100"
+    sql += " ORDER BY inv.created_at DESC, inv.id DESC LIMIT 100"
     const invoices = await query(sql, params)
     return NextResponse.json({ invoices })
   } catch (e) {

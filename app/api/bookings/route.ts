@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const search = req.nextUrl.searchParams.get("search") ?? ""
   const status = req.nextUrl.searchParams.get("status") ?? ""
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "50")
-  const sort = req.nextUrl.searchParams.get("sort") ?? "event_date"
+  const sort = req.nextUrl.searchParams.get("sort") ?? "recent"
 
   try {
     let sql = `
@@ -25,9 +25,9 @@ export async function GET(req: NextRequest) {
       sql += ` AND b.status = $${params.length}`
     }
 
-    sql += sort === "recent"
-      ? " ORDER BY b.created_at DESC"
-      : " ORDER BY b.event_date"
+    sql += sort === "event_date"
+      ? " ORDER BY b.event_date"
+      : " ORDER BY b.created_at DESC, b.id DESC"
 
     params.push(limit)
     sql += ` LIMIT $${params.length}`
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const {
       customer_id, event_name, event_type, event_date, setup_date,
       return_date, venue_address, notes, items = [],
-      discount = 0, gst_percent = 0,
+      discount = 0, gst_percent = 0, transport_charges = 0,
     } = body
 
     const booking = await withTransaction(async (client) => {
@@ -58,20 +58,22 @@ export async function POST(req: NextRequest) {
         subtotal += parseFloat(item.amount) || 0
       }
       const discountAmt = parseFloat(discount) || 0
+      const transportCharges = parseFloat(transport_charges) || 0
       const gstPercent = parseFloat(gst_percent) || 0
-      const gstAmount = ((subtotal - discountAmt) * gstPercent) / 100
-      const totalAmount = subtotal - discountAmt + gstAmount
+      const taxableBase = subtotal - discountAmt + transportCharges
+      const gstAmount = (taxableBase * gstPercent) / 100
+      const totalAmount = taxableBase + gstAmount
 
       const { rows: [booking] } = await client.query(
         `INSERT INTO bookings
          (booking_number, customer_id, event_name, event_type, event_date,
           setup_date, return_date, venue_address, notes, status,
-          subtotal, discount, gst_percent, gst_amount, total_amount, remaining_balance)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'Inquiry',$10,$11,$12,$13,$14,$14)
+          subtotal, transport_charges, discount, gst_percent, gst_amount, total_amount, remaining_balance)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'Inquiry',$10,$11,$12,$13,$14,$15,$15)
          RETURNING *`,
         [booking_number, customer_id, event_name, event_type, event_date,
          setup_date, return_date, venue_address, notes,
-         subtotal, discountAmt, gstPercent, gstAmount, totalAmount]
+         subtotal, transportCharges, discountAmt, gstPercent, gstAmount, totalAmount]
       )
 
       for (const item of items) {

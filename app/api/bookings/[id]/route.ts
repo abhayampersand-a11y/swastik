@@ -52,7 +52,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json()
     const {
       event_name, event_type, event_date, setup_date, return_date,
-      venue_address, notes, status, discount, gst_percent,
+      venue_address, notes, status, discount, gst_percent, transport_charges,
     } = body
 
     const existing = await queryOne<{ status: string; total_amount: string; advance_paid: string }>(
@@ -122,18 +122,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       const discountAmt = parseFloat(discount) || 0
       const gstPercent = parseFloat(gst_percent) || 0
+      // When the caller omits transport_charges, keep whatever is already stored.
+      const transportParam =
+        transport_charges === undefined || transport_charges === null || transport_charges === ""
+          ? null
+          : parseFloat(transport_charges) || 0
 
       const { rows: [booking] } = await client.query(
         `UPDATE bookings SET
          event_name=$1, event_type=$2, event_date=$3, setup_date=$4, return_date=$5,
          venue_address=$6, notes=$7, status=$8, discount=$9, gst_percent=$10,
-         gst_amount = (subtotal - $9) * $10 / 100,
-         total_amount = (subtotal - $9) * (1 + $10 / 100),
-         remaining_balance = (subtotal - $9) * (1 + $10 / 100) - COALESCE(advance_paid, 0),
+         transport_charges = COALESCE($12, transport_charges),
+         gst_amount = (subtotal - $9 + COALESCE($12, transport_charges)) * $10 / 100,
+         total_amount = (subtotal - $9 + COALESCE($12, transport_charges)) * (1 + $10 / 100),
+         remaining_balance = (subtotal - $9 + COALESCE($12, transport_charges)) * (1 + $10 / 100) - COALESCE(advance_paid, 0),
          updated_at=NOW()
          WHERE id=$11 RETURNING *`,
         [event_name, event_type, event_date, setup_date, return_date,
-         venue_address, notes, status, discountAmt, gstPercent, id]
+         venue_address, notes, status, discountAmt, gstPercent, id, transportParam]
       )
 
       await client.query(

@@ -8,7 +8,7 @@ export async function GET() {
        FROM inventory_categories c
        LEFT JOIN inventory_items i ON i.category_id = c.id
        GROUP BY c.id
-       ORDER BY c.name`
+       ORDER BY c.created_at DESC, c.id DESC`
     )
     return NextResponse.json({ categories })
   } catch (e) {

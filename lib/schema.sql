@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   notes TEXT,
   status VARCHAR(50) DEFAULT 'Inquiry', -- Inquiry, Estimated, Confirmed, Running, Completed, Closed, Cancelled
   subtotal NUMERIC(10,2) DEFAULT 0,
+  transport_charges NUMERIC(10,2) DEFAULT 0,
   discount NUMERIC(10,2) DEFAULT 0,
   gst_percent NUMERIC(5,2) DEFAULT 0,
   gst_amount NUMERIC(10,2) DEFAULT 0,

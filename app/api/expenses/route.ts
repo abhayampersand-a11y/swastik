@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       params.push(category)
       sql += ` AND category=$${params.length}`
     }
-    sql += " ORDER BY expense_date DESC LIMIT 200"
+    sql += " ORDER BY created_at DESC, id DESC LIMIT 200"
     const expenses = await query(sql, params)
 
     // Summary by category

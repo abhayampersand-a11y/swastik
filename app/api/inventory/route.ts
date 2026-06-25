@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       params.push(category)
       sql += ` AND c.name = $${params.length}`
     }
-    sql += " ORDER BY i.name"
+    sql += " ORDER BY i.created_at DESC, i.id DESC"
 
     const items = await query(sql, params)
     const categories = await query("SELECT * FROM inventory_categories ORDER BY name")

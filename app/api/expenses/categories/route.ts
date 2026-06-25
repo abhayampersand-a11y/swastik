@@ -8,7 +8,7 @@ export async function GET() {
        FROM expense_categories c
        LEFT JOIN expenses e ON e.category = c.name
        GROUP BY c.id
-       ORDER BY c.name`
+       ORDER BY c.created_at DESC, c.id DESC`
     )
     return NextResponse.json({ categories })
   } catch (e) {

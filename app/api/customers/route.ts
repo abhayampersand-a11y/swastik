@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
       params.push(`%${search}%`)
       sql += ` AND (name ILIKE $${params.length} OR mobile ILIKE $${params.length})`
     }
-    sql += " ORDER BY name"
+    sql += " ORDER BY created_at DESC, id DESC"
     const customers = await query(sql, params)
     return NextResponse.json({ customers })
   } catch (e) {

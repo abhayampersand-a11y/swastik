@@ -4,7 +4,7 @@ import { query } from "@/lib/db"
 export async function GET() {
   try {
     const laborers = await query(
-      "SELECT * FROM laborers WHERE is_active=TRUE ORDER BY name"
+      "SELECT * FROM laborers WHERE is_active=TRUE ORDER BY created_at DESC, id DESC"
     )
     return NextResponse.json({ laborers })
   } catch (e) {

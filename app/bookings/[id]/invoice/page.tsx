@@ -164,6 +164,11 @@ export default function InvoicePrintPage() {
                   <span>Discount</span><span>− {fmtINR(Number(b.discount))}</span>
                 </div>
               )}
+              {Number(b.transport_charges) > 0 && (
+                <div className="flex justify-between text-gray-600">
+                  <span>Transport / Delivery</span><span>{fmtINR(Number(b.transport_charges))}</span>
+                </div>
+              )}
               {Number(b.gst_percent) > 0 && (
                 <div className="flex justify-between text-gray-600">
                   <span>GST ({Number(b.gst_percent)}%)</span><span>{fmtINR(Number(b.gst_amount))}</span>

@@ -86,6 +86,7 @@ export default function EditBookingPage() {
   const [warning, setWarning] = useState<string | null>(null)
   const [booking, setBooking] = useState<Record<string, unknown> | null>(null)
   const [items, setItems] = useState<EditItem[]>([])
+  const [transportCharges, setTransportCharges] = useState("0")
   const [discount, setDiscount] = useState("0")
   const [gstPercent, setGstPercent] = useState("0")
 
@@ -102,6 +103,7 @@ export default function EditBookingPage() {
       .then((r) => r.json())
       .then((d) => {
         setBooking(d.booking)
+        setTransportCharges(String(d.booking?.transport_charges ?? 0))
         setDiscount(String(d.booking?.discount ?? 0))
         setGstPercent(String(d.booking?.gst_percent ?? 0))
         const loaded: EditItem[] = (d.items ?? []).map((it: Record<string, unknown>) => {
@@ -195,8 +197,9 @@ export default function EditBookingPage() {
 
   const subtotal = items.reduce((s, it) => s + lineAmount(it), 0)
   const disc = parseFloat(discount) || 0
-  const gst = ((subtotal - disc) * (parseFloat(gstPercent) || 0)) / 100
-  const total = subtotal - disc + gst
+  const transport = parseFloat(transportCharges) || 0
+  const gst = ((subtotal - disc + transport) * (parseFloat(gstPercent) || 0)) / 100
+  const total = subtotal - disc + transport + gst
 
   const handleSave = async () => {
     const valid = items.filter((i) => i.item_id > 0)
@@ -208,6 +211,7 @@ export default function EditBookingPage() {
     try {
       const payload = {
         discount: disc,
+        transport_charges: transport,
         gst_percent: parseFloat(gstPercent) || 0,
         items: valid.map((it) => ({
           item_id: it.item_id,
@@ -390,6 +394,10 @@ export default function EditBookingPage() {
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <Label>Transport / Delivery (₹)</Label>
+                <Input type="number" value={transportCharges} onChange={(e) => setTransportCharges(e.target.value)} />
+              </div>
+              <div>
                 <Label>Discount (₹)</Label>
                 <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} />
               </div>
@@ -401,6 +409,9 @@ export default function EditBookingPage() {
             <div className="rounded-lg bg-muted/50 p-3 space-y-1.5 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{fmtINR(subtotal)}</span></div>
               <div className="flex justify-between text-muted-foreground"><span>Discount</span><span>− {fmtINR(disc)}</span></div>
+              {transport > 0 && (
+                <div className="flex justify-between text-muted-foreground"><span>Transport</span><span>+ {fmtINR(transport)}</span></div>
+              )}
               <div className="flex justify-between text-muted-foreground"><span>GST ({gstPercent}%)</span><span>{fmtINR(gst)}</span></div>
               <div className="flex justify-between font-semibold text-base border-t pt-1.5"><span>Total</span><span>{fmtINR(total)}</span></div>
               {booking != null && Number(booking.advance_paid) > 0 && (

@@ -38,6 +38,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const items: ItemInput[] = body.items ?? []
     const discountAmt = parseFloat(body.discount) || 0
     const gstPercent = parseFloat(body.gst_percent) || 0
+    const transportCharges = parseFloat(body.transport_charges) || 0
 
     const booking = await withTransaction(async (client) => {
       const { rows: [existing] } = await client.query<{
@@ -157,18 +158,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
 
       // 5. Recompute booking financials and persist.
+      //    Transport is part of the taxable base: base = subtotal - discount + transport.
       subtotal = money(subtotal)
-      const gstAmount = money((subtotal - discountAmt) * gstPercent / 100)
-      const totalAmount = money(subtotal - discountAmt + gstAmount)
+      const taxableBase = subtotal - discountAmt + transportCharges
+      const gstAmount = money(taxableBase * gstPercent / 100)
+      const totalAmount = money(taxableBase + gstAmount)
       const advance = parseFloat(existing.advance_paid) || 0
       const remainingBalance = money(totalAmount - advance)
 
       const { rows: [updated] } = await client.query(
         `UPDATE bookings SET
-           subtotal=$1, discount=$2, gst_percent=$3, gst_amount=$4,
-           total_amount=$5, remaining_balance=$6, updated_at=NOW()
-         WHERE id=$7 RETURNING *`,
-        [subtotal, discountAmt, gstPercent, gstAmount, totalAmount, remainingBalance, id]
+           subtotal=$1, transport_charges=$2, discount=$3, gst_percent=$4, gst_amount=$5,
+           total_amount=$6, remaining_balance=$7, updated_at=NOW()
+         WHERE id=$8 RETURNING *`,
+        [subtotal, transportCharges, discountAmt, gstPercent, gstAmount, totalAmount, remainingBalance, id]
       )
 
       await client.query(
